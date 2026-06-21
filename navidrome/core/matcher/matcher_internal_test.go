@@ -1,0 +1,67 @@
+package matcher
+
+import (
+	"github.com/navidrome/navidrome/model"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+var _ = Describe("similarityRatio", func() {
+	It("returns 1.0 for identical strings", func() {
+		Expect(similarityRatio("hello", "hello")).To(BeNumerically("==", 1.0))
+	})
+
+	It("returns 0.0 for empty strings", func() {
+		Expect(similarityRatio("", "test")).To(BeNumerically("==", 0.0))
+		Expect(similarityRatio("test", "")).To(BeNumerically("==", 0.0))
+	})
+
+	It("returns high similarity for remastered suffix", func() {
+		ratio := similarityRatio("paranoid android", "paranoid android remastered")
+		Expect(ratio).To(BeNumerically(">=", 0.85))
+	})
+
+	It("returns high similarity for suffix additions like (Live)", func() {
+		ratio := similarityRatio("bohemian rhapsody", "bohemian rhapsody live")
+		Expect(ratio).To(BeNumerically(">=", 0.90))
+	})
+
+	It("returns high similarity for 'yesterday' variants (common prefix)", func() {
+		ratio := similarityRatio("yesterday", "yesterday once more")
+		Expect(ratio).To(BeNumerically(">=", 0.85))
+	})
+
+	It("returns low similarity for same suffix", func() {
+		ratio := similarityRatio("postman (live)", "taxman (live)")
+		Expect(ratio).To(BeNumerically("<", 0.85))
+	})
+
+	It("handles unicode characters", func() {
+		ratio := similarityRatio("dont stop believin", "don't stop believin'")
+		Expect(ratio).To(BeNumerically(">=", 0.85))
+	})
+
+	It("returns low similarity for completely different strings", func() {
+		ratio := similarityRatio("abc", "xyz")
+		Expect(ratio).To(BeNumerically("<", 0.5))
+	})
+
+	It("is symmetric", func() {
+		ratio1 := similarityRatio("hello world", "hello")
+		ratio2 := similarityRatio("hello", "hello world")
+		Expect(ratio1).To(Equal(ratio2))
+	})
+})
+
+var _ = Describe("matcher internals", func() {
+	It("computeSpecificityLevel uses sanitizedTrack.artistMBID for artist-MBID levels", func() {
+		q := songQuery{
+			title:      "song",
+			artistMBID: "artist-mbid-1",
+			albumMBID:  "album-mbid-1",
+		}
+		mf := model.MediaFile{Title: "Song", MbzAlbumID: "album-mbid-1"} // note: mf.MbzArtistID intentionally empty
+		t := newSanitizedTrack(&mf, "artist-mbid-1")                     // resolved MBID supplied here
+		Expect(computeSpecificityLevel(q, t, 0.85)).To(Equal(5))
+	})
+})
