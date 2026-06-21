@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git clone *)",
+      "Read(//tmp/navidrome/**)",
+      "Bash(cp -r /tmp/navidrome /opt/navidrome_ai)",
+      "Bash(git init *)",
+      "Bash(git config *)",
+      "Bash(git branch *)",
+      "Bash(git add *)"
+    ]
+  }
+}
