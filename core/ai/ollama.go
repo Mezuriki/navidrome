@@ -47,23 +47,24 @@ func (p *OllamaProvider) Name() string {
 	return "ollama"
 }
 
-// Translate translates text using Ollama
+// Translate translates text using Ollama (strict prompt)
 func (p *OllamaProvider) Translate(ctx context.Context, req *TranslateRequest) (*TranslateResponse, error) {
-	systemPrompt := "You are a music expert and professional translator. " +
-		"If you know the song, recall its full lyrics and translate them. " +
-		"If you do not know the song and no lyrics were provided, say so honestly. " +
-		"Answer in plain text. Show the original lyrics first, then a line with '---', then the translation."
+	systemPrompt := "You translate song lyrics. Follow these rules exactly:\n" +
+		"1. If lyrics are provided, translate ONLY those lyrics to the target language. Do not add or invent anything.\n" +
+		"2. If no lyrics are provided and you are confident you know the song, write the original lyrics first, then a single line containing exactly ---, then the translation.\n" +
+		"3. If you do not actually know the song, output exactly: I could not find the lyrics for this song.\n" +
+		"4. Output only the result. No explanations, no preamble, no notes, no markdown."
 
 	recalled := false
 	var prompt string
 	if strings.TrimSpace(req.Lyrics) != "" {
-		prompt = fmt.Sprintf("Song: %s by %s\n\nHere are the lyrics to translate to %s:\n\n%s",
-			req.Title, req.Artist, langName(req.ToLang), req.Lyrics)
+		prompt = fmt.Sprintf("Translate the following lyrics to %s. Output only the translation:\n\n%s",
+			langName(req.ToLang), req.Lyrics)
 	} else {
 		recalled = true
-		prompt = fmt.Sprintf("Song: %s by %s\n\n"+
-			"No lyrics were provided. If you know this song, recall its lyrics and then translate them to %s. "+
-			"If you don't know the song, reply: \"I couldn't find the lyrics for this song.\"",
+		prompt = fmt.Sprintf("Song: \"%s\" by \"%s\".\n"+
+			"No lyrics were provided. If you know this song well, output the original lyrics, then a line with ---, then the %s translation. "+
+			"If you do not actually know this song, output exactly: I could not find the lyrics for this song.",
 			req.Title, req.Artist, langName(req.ToLang))
 	}
 
@@ -73,7 +74,7 @@ func (p *OllamaProvider) Translate(ctx context.Context, req *TranslateRequest) (
 	}
 
 	return &TranslateResponse{
-		Translation: resp,
+		Translation: strings.TrimSpace(resp),
 		Recalled:    recalled,
 		Model:       p.getModel(req.Model),
 	}, nil

@@ -54,24 +54,22 @@ func (p *OpenAIProvider) Name() string {
 // Translate recalls (or uses provided) lyrics and translates them to the target language.
 // The response is plain text for broad model compatibility.
 func (p *OpenAIProvider) Translate(ctx context.Context, req *TranslateRequest) (*TranslateResponse, error) {
-	systemPrompt := "You are a music expert and professional translator. " +
-		"Your task is to provide the lyrics of a song and translate them. " +
-		"If you know the song, recall its full lyrics and translate them line by line. " +
-		"If you do not know the song and no lyrics were provided, say so honestly. " +
-		"Always answer in plain text. Format the result as: the original lyrics first " +
-		"(if recalled), a blank line, then a separator '---', a blank line, and the translation. " +
-		"Do not add any other commentary."
+	systemPrompt := "You translate song lyrics. Follow these rules exactly:\n" +
+		"1. If lyrics are provided, translate ONLY those lyrics to the target language. Do not add or invent anything.\n" +
+		"2. If no lyrics are provided and you are confident you know the song, write the original lyrics first, then a single line containing exactly ---, then the translation.\n" +
+		"3. If you do not actually know the song, output exactly: I could not find the lyrics for this song.\n" +
+		"4. Output only the result. No explanations, no preamble, no notes, no markdown."
 
 	recalled := false
 	var userContent string
 	if strings.TrimSpace(req.Lyrics) != "" {
-		userContent = fmt.Sprintf("Song: %s by %s\n\nHere are the lyrics to translate to %s:\n\n%s",
-			req.Title, req.Artist, langName(req.ToLang), req.Lyrics)
+		userContent = fmt.Sprintf("Translate the following lyrics to %s. Output only the translation:\n\n%s",
+			langName(req.ToLang), req.Lyrics)
 	} else {
 		recalled = true
-		userContent = fmt.Sprintf("Song: %s by %s\n\n"+
-			"No lyrics were provided. If you know this song, recall its lyrics and then translate them to %s. "+
-			"If you don't know the song, reply: \"I couldn't find the lyrics for this song.\"",
+		userContent = fmt.Sprintf("Song: \"%s\" by \"%s\".\n"+
+			"No lyrics were provided. If you know this song well, output the original lyrics, then a line with ---, then the %s translation. "+
+			"If you do not actually know this song, output exactly: I could not find the lyrics for this song.",
 			req.Title, req.Artist, langName(req.ToLang))
 	}
 
@@ -86,7 +84,7 @@ func (p *OpenAIProvider) Translate(ctx context.Context, req *TranslateRequest) (
 	}
 
 	return &TranslateResponse{
-		Translation: resp,
+		Translation: strings.TrimSpace(resp),
 		Recalled:    recalled,
 		Model:       p.getModel(req.Model),
 	}, nil
