@@ -1,100 +1,89 @@
-# Navidrome AI
+<a href="https://www.navidrome.org"><img src="resources/logo-192x192.png" alt="Navidrome logo" title="navidrome" align="right" height="60px" /></a>
 
-Navidrome с интегрированным AI Assistant для перевода лирики и анализа треков.
+# Navidrome Music Server &nbsp;[![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Tired%20of%20paying%20for%20music%20subscriptions%2C%20and%20not%20finding%20what%20you%20really%20like%3F%20Roll%20your%20own%20streaming%20service%21&url=https://navidrome.org&via=navidrome)
 
-## 🎯 Что нового
+[![Last Release](https://img.shields.io/github/v/release/navidrome/navidrome?logo=github&label=latest&style=flat-square)](https://github.com/navidrome/navidrome/releases)
+[![Build](https://img.shields.io/github/actions/workflow/status/navidrome/navidrome/pipeline.yml?branch=master&logo=github&style=flat-square)](https://nightly.link/navidrome/navidrome/workflows/pipeline/master)
+[![Downloads](https://img.shields.io/github/downloads/navidrome/navidrome/total?logo=github&style=flat-square)](https://github.com/navidrome/navidrome/releases/latest)
+[![Docker Pulls](https://img.shields.io/docker/pulls/deluan/navidrome?logo=docker&label=pulls&style=flat-square)](https://hub.docker.com/r/deluan/navidrome)
+[![Dev Chat](https://img.shields.io/discord/671335427726114836?logo=discord&label=discord&style=flat-square)](https://discord.gg/xh7j7yF)
+[![Subreddit](https://img.shields.io/reddit/subreddit-subscribers/navidrome?logo=reddit&label=/r/navidrome&style=flat-square)](https://www.reddit.com/r/navidrome/)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.0-ff69b4.svg?style=flat-square)](CODE_OF_CONDUCT.md)
+[![Gurubase](https://img.shields.io/badge/Gurubase-Ask%20Navidrome%20Guru-006BFF?style=flat-square)](https://gurubase.io/g/navidrome)
 
-- **AI Drawer** - выезжающая панель справа с AI функциями
-- **Перевод лирики** - перевод текстов песен на любой язык
-- **Декодинг треков** - AI анализ смысла и настроения песен
-- **Анализ треков** - определение жанра, стиля и тематики
-- **Мульти-провайдер** - поддержка OpenAI, Anthropic, Ollama, LocalAI
+Navidrome is an open source web-based music collection server and streamer. It gives you freedom to listen to your
+music collection from any browser or mobile device. It's like your personal Spotify!
 
-## 🏗️ Архитектура
 
-### Frontend (React)
-- `/ui/src/dialogs/AIDrawer.jsx` - главный AI диалог
-- `/ui/src/personal/AIConfig.jsx` - настройки провайдера
-- `/ui/src/common/AIDrawer.jsx` - Redux контейнер
+**Note**: The `master` branch may be in an unstable or even broken state during development. 
+Please use [releases](https://github.com/navidrome/navidrome/releases) instead of 
+the `master` branch in order to get a stable set of binaries.
 
-### Backend (Go)
-- `/core/ai/provider.go` - интерфейс LLM провайдеров
-- `/core/ai/openai.go` - OpenAI реализация
-- `/core/ai/ollama.go` - Ollama реализация
-- `/core/ai/service.go` - AI сервис
-- `/server/nativeapi/ai.go` - REST API endpoints
+## [Check out our Live Demo!](https://www.navidrome.org/demo/)
 
-## 🚀 Установка через Docker
+__Any feedback is welcome!__ If you need/want a new feature, find a bug or think of any way to improve Navidrome, 
+please file a [GitHub issue](https://github.com/navidrome/navidrome/issues) or join the discussion in our 
+[Subreddit](https://www.reddit.com/r/navidrome/). If you want to contribute to the project in any other way 
+([ui/backend dev](https://www.navidrome.org/docs/developers/), 
+[translations](https://www.navidrome.org/docs/developers/translations/), 
+[themes](https://www.navidrome.org/docs/developers/creating-themes)), please join the chat in our 
+[Discord server](https://discord.gg/xh7j7yF). 
 
-```bash
-docker run -d \
-  --name navidrome_ai \
-  -p 4533:4533 \
-  -v /your/music:/music:ro \
-  -v /your/data:/data \
-  ghcr.io/yourusername/navidrome_ai:latest
-```
+## Installation
 
-## ⚙️ Настройка AI провайдера
+See instructions on the [project's website](https://www.navidrome.org/docs/installation/)
 
-### OpenAI
-1. Откройте Navidrome в браузере
-2. Перейдите в **Personal** → **AI Assistant Settings**
-3. Выберите провайдер: **OpenAI**
-4. Введите API Key
-5. Укажите модель (например, `gpt-4o-mini`)
+## Cloud Hosting
 
-### Ollama (локальный)
-1. Установите [Ollama](https://ollama.ai)
-2. Запустите Ollama: `ollama serve`
-3. В настройках Navidrome выберите **Ollama**
-4. Endpoint: `http://host.docker.internal:11434/api`
-5. Model: `llama3` или другая
+[PikaPods](https://www.pikapods.com) has partnered with us to offer you an 
+[officially supported, cloud-hosted solution](https://www.navidrome.org/docs/installation/managed/#pikapods). 
+A share of the revenue helps fund the development of Navidrome at no additional cost for you.
 
-### Anthropic
-1. Получите API Key на [console.anthropic.com](https://console.anthropic.com)
-2. Выберите провайдер **Anthropic**
-3. Введите API Key
-4. Model: `claude-3-5-sonnet-20241022`
+[![PikaPods](https://www.pikapods.com/static/run-button.svg)](https://www.pikapods.com/pods?run=navidrome)
 
-## 📡 API Endpoints
+## Features
+ 
+ - Handles very **large music collections**
+ - Streams virtually **any audio format** available
+ - Reads and uses all your beautifully curated **metadata**
+ - Great support for **compilations** (Various Artists albums) and **box sets** (multi-disc albums)
+ - **Multi-user**, each user has their own play counts, playlists, favourites, etc...
+ - Very **low resource usage**
+ - **Multi-platform**, runs on macOS, Linux and Windows. **Docker** images are also provided
+ - Ready to use binaries for all major platforms, including **Raspberry Pi**
+ - Automatically **monitors your library** for changes, importing new files and reloading new metadata 
+ - Supports **lyrics** from sidecar .ttml, .yaml/.yml Lyricsfile, .elrc, .lrc, .srt, .txt files and embedded TTML, Enhanced LRC, LRC, SRT, and plain-text tags (via `lyricspriority`)
+ - **Themeable**, modern and responsive **Web interface** based on [Material UI](https://material-ui.com)
+ - **Compatible** with all Subsonic/Madsonic/Airsonic [clients](https://www.navidrome.org/docs/overview/#apps)
+ - **Transcoding** on the fly. Can be set per user/player. **Opus encoding is supported**
+ - Translated to **various languages**
 
-```
-POST /api/ai/translate   - Перевод текста
-POST /api/ai/analyze     - Анализ трека
-POST /api/ai/decode      - Декодинг смысла
-GET  /api/ai/config      - Получить конфигурацию
-PUT  /api/ai/config      - Обновить конфигурацию
-GET  /api/ai/status      - Статус AI
-```
+## Translations
 
-## 🔧 Переменные окружения
+Navidrome uses [POEditor](https://poeditor.com/) for translations, and we are always looking 
+for [more contributors](https://www.navidrome.org/docs/developers/translations/)
 
-```bash
-# AI Configuration (опционально, можно через UI)
-ND_AI_PROVIDER=openai
-ND_AI_API_KEY=sk-...
-ND_AI_API_ENDPOINT=https://api.openai.com/v1
-ND_AI_MODEL=gpt-4o-mini
-ND_AI_DEFAULT_LANGUAGE=ru
-```
+<a href="https://poeditor.com/"> 
+<img height="32" src="https://github.com/user-attachments/assets/c19b1d2b-01e1-4682-a007-12356c42147c">
+</a>
 
-## 🛠️ Разработка
+## Documentation
+All documentation can be found in the project's website: https://www.navidrome.org/docs. 
+Here are some useful direct links:
 
-```bash
-# Сборка UI
-cd ui
-npm install
-npm run build
+- [Overview](https://www.navidrome.org/docs/overview/)
+- [Installation](https://www.navidrome.org/docs/installation/)
+  - [Docker](https://www.navidrome.org/docs/installation/docker/)
+  - [Binaries](https://www.navidrome.org/docs/installation/pre-built-binaries/)
+  - [Build from source](https://www.navidrome.org/docs/installation/build-from-source/)
+- [Development](https://www.navidrome.org/docs/developers/)
+- [Subsonic API Compatibility](https://www.navidrome.org/docs/developers/subsonic-api/)
 
-# Сборка backend
-cd ..
-go build
+## Screenshots
 
-# Запуск
-./navidrome_ai
-```
-
-## 📝 Лицензия
-
-Основан на [Navidrome](https://github.com/navidrome/navidrome) -GPLv3
+<p align="left">
+    <img height="550" src="https://raw.githubusercontent.com/navidrome/navidrome/master/.github/screenshots/ss-mobile-login.png">
+    <img height="550" src="https://raw.githubusercontent.com/navidrome/navidrome/master/.github/screenshots/ss-mobile-player.png">
+    <img height="550" src="https://raw.githubusercontent.com/navidrome/navidrome/master/.github/screenshots/ss-mobile-album-view.png">
+    <img width="550" src="https://raw.githubusercontent.com/navidrome/navidrome/master/.github/screenshots/ss-desktop-player.png">
+</p>

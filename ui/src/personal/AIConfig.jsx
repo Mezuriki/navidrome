@@ -11,7 +11,7 @@ import {
 } from 'react-admin'
 import { Typography, Box, Card, CardContent } from '@material-ui/core'
 import { makeStyles } from '@material-ui/core/styles'
-import { Psychology as AIIcon } from '@material-ui/icons'
+import { MdPsychology as AIIcon } from 'react-icons/md'
 
 const useStyles = makeStyles({
   root: { marginTop: '1em' },

@@ -74,9 +74,17 @@ type DecodeResponse struct {
 
 // Config holds AI provider configuration
 type Config struct {
-	Provider      string `json:"provider"`
-	APIKey        string `json:"apiKey"`
-	APIEndpoint   string `json:"apiEndpoint"`
-	Model         string `json:"model"`
-	DefaultLang   string `json:"defaultLanguage"`
+	Provider    string `json:"provider"`
+	APIKey      string `json:"apiKey"`
+	APIEndpoint string `json:"apiEndpoint"`
+	Model       string `json:"model"`
+	DefaultLang string `json:"defaultLanguage"`
+}
+
+// truncateString shortens a string to maxLen characters, appending "..." if truncated
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

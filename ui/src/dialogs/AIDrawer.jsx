@@ -21,10 +21,11 @@ import {
 import {
   Close as CloseIcon,
   Translate as TranslateIcon,
-  Psychology as DecodeIcon,
-  Lightbulb as AnalyzeIcon,
+  Autorenew as DecodeIcon,
+  Info as AnalyzeIcon,
   Send as SendIcon,
 } from '@material-ui/icons'
+import { MdPsychology } from 'react-icons/md'
 import { makeStyles } from '@material-ui/core/styles'
 import { useTranslate, useDataProvider, useNotify } from 'react-admin'
 import config from '../config'
@@ -209,7 +210,7 @@ const AIDrawer = ({ open, onClose, record }) => {
     >
       <Box className={classes.header}>
         <Typography variant="h6" className={classes.title}>
-          <Psychology fontSize="small" />
+          <MdPsychology fontSize="small" />
           AI Assistant
         </Typography>
         <IconButton onClick={onClose} size="small">

@@ -218,10 +218,3 @@ func (p *OllamaProvider) getModel(model string) string {
 	}
 	return model
 }
-
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}

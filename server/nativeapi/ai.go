@@ -16,6 +16,14 @@ func NewAIHandler(aiService *ai.Service) *AIHandler {
 	return &AIHandler{aiService: aiService}
 }
 
+// encodeJSON writes a JSON response
+func encodeJSON(w http.ResponseWriter, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 // TranslateRequest handles translation requests
 func (h *AIHandler) Translate(w http.ResponseWriter, r *http.Request) {
 	var req ai.TranslateRequest
