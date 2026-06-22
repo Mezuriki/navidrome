@@ -434,7 +434,8 @@
         "targetLanguage": "Target Language",
         "action": "Translate",
         "noLyrics": "No lyrics available for this track",
-        "description": "Translate song lyrics to your preferred language"
+        "recallHint": "No embedded lyrics — the AI will try to recall the song from its title and artist.",
+        "description": "Translates the lyrics to your preferred language. If the track has no embedded lyrics, the AI recalls them from the song title and artist."
       },
       "decode": {
         "title": "Decode Track",

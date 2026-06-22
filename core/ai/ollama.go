@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -48,9 +49,23 @@ func (p *OllamaProvider) Name() string {
 
 // Translate translates text using Ollama
 func (p *OllamaProvider) Translate(ctx context.Context, req *TranslateRequest) (*TranslateResponse, error) {
-	systemPrompt := fmt.Sprintf("You are a professional translator. Translate the given text to %s. Only return the translated text, nothing else.", req.ToLang)
+	systemPrompt := "You are a music expert and professional translator. " +
+		"If you know the song, recall its full lyrics and translate them. " +
+		"If you do not know the song and no lyrics were provided, say so honestly. " +
+		"Answer in plain text. Show the original lyrics first, then a line with '---', then the translation."
 
-	prompt := fmt.Sprintf("Translate:\n\n%s", req.Text)
+	recalled := false
+	var prompt string
+	if strings.TrimSpace(req.Lyrics) != "" {
+		prompt = fmt.Sprintf("Song: %s by %s\n\nHere are the lyrics to translate to %s:\n\n%s",
+			req.Title, req.Artist, langName(req.ToLang), req.Lyrics)
+	} else {
+		recalled = true
+		prompt = fmt.Sprintf("Song: %s by %s\n\n"+
+			"No lyrics were provided. If you know this song, recall its lyrics and then translate them to %s. "+
+			"If you don't know the song, reply: \"I couldn't find the lyrics for this song.\"",
+			req.Title, req.Artist, langName(req.ToLang))
+	}
 
 	resp, err := p.callGenerate(ctx, systemPrompt, prompt, req.Model)
 	if err != nil {
@@ -59,84 +74,70 @@ func (p *OllamaProvider) Translate(ctx context.Context, req *TranslateRequest) (
 
 	return &TranslateResponse{
 		Translation: resp,
+		Recalled:    recalled,
 		Model:       p.getModel(req.Model),
 	}, nil
 }
 
-// Analyze analyzes a track using Ollama
+// Analyze analyzes a track using Ollama (plain-text response)
 func (p *OllamaProvider) Analyze(ctx context.Context, req *AnalyzeRequest) (*AnalyzeResponse, error) {
-	systemPrompt := `You are a music expert AI. Analyze the given track information and provide insights.
-Return a JSON object with the following structure:
-{
-  "genre": "primary genre",
-  "mood": ["mood1", "mood2"],
-  "style": ["style1", "style2"],
-  "themes": ["theme1", "theme2"],
-  "description": "brief description of the track",
-  "similarArtists": ["artist1", "artist2"]
-}`
+	systemPrompt := "You are a knowledgeable music critic. Analyze the track and write a concise, engaging " +
+		"description: genre and style, mood, themes, and a few similar artists. Plain text, short paragraphs " +
+		"and bullet points. Do not output JSON."
 
-	userPrompt := fmt.Sprintf("Track: %s by %s\nAlbum: %s", req.Title, req.Artist, req.Album)
+	var b strings.Builder
+	fmt.Fprintf(&b, "Track: %s\nArtist: %s\n", req.Title, req.Artist)
+	if req.Album != "" {
+		fmt.Fprintf(&b, "Album: %s\n", req.Album)
+	}
 	if req.Year > 0 {
-		userPrompt += fmt.Sprintf(" (%d)", req.Year)
+		fmt.Fprintf(&b, "Year: %d\n", req.Year)
 	}
 	if req.Genre != "" {
-		userPrompt += fmt.Sprintf("\nOriginal Genre: %s", req.Genre)
+		fmt.Fprintf(&b, "Listed genre: %s\n", req.Genre)
 	}
-	if req.Lyrics != "" {
-		userPrompt += fmt.Sprintf("\nLyrics excerpt: %s", truncateString(req.Lyrics, 500))
+	if strings.TrimSpace(req.Lyrics) != "" {
+		fmt.Fprintf(&b, "\nLyrics excerpt:\n%s\n", truncateString(req.Lyrics, 600))
 	}
 
-	resp, err := p.callGenerate(ctx, systemPrompt, userPrompt, req.Model)
+	resp, err := p.callGenerate(ctx, systemPrompt, b.String(), req.Model)
 	if err != nil {
 		return nil, err
 	}
 
-	var result AnalyzeResponse
-	if err := json.Unmarshal([]byte(resp), &result); err != nil {
-		return &AnalyzeResponse{
-			Description: resp,
-			Model:       p.getModel(req.Model),
-		}, nil
-	}
-
-	result.Model = p.getModel(req.Model)
-	return &result, nil
+	return &AnalyzeResponse{
+		Text:  resp,
+		Model: p.getModel(req.Model),
+	}, nil
 }
 
-// Decode analyzes the meaning of a song using Ollama
+// Decode analyzes the meaning of a song using Ollama (plain-text response)
 func (p *OllamaProvider) Decode(ctx context.Context, req *DecodeRequest) (*DecodeResponse, error) {
-	systemPrompt := `You are a music analyst specializing in song interpretation. Analyze the meaning and mood of the song.
-Return a JSON object with the following structure:
-{
-  "meaning": "overall meaning of the song",
-  "mood": "primary mood",
-  "themes": ["theme1", "theme2"],
-  "interpretation": "detailed interpretation of the song's message"
-}`
+	systemPrompt := "You are a thoughtful music analyst who explains what songs mean. " +
+		"Interpret the song: its meaning and message, mood, main themes, and a short commentary. " +
+		"Plain text, short paragraphs. If you don't know the song, base it on the title/artist and say so. " +
+		"Do not output JSON or empty responses."
 
-	userPrompt := fmt.Sprintf("Song: %s by %s\nAlbum: %s", req.Title, req.Artist, req.Album)
-	if req.Lyrics != "" {
-		userPrompt += fmt.Sprintf("\n\nLyrics:\n%s", req.Lyrics)
+	var b strings.Builder
+	fmt.Fprintf(&b, "Song: %s\nArtist: %s\n", req.Title, req.Artist)
+	if req.Album != "" {
+		fmt.Fprintf(&b, "Album: %s\n", req.Album)
+	}
+	if strings.TrimSpace(req.Lyrics) != "" {
+		fmt.Fprintf(&b, "\nLyrics:\n%s\n", req.Lyrics)
 	} else {
-		userPrompt += "\n\nNo lyrics provided. Analyze based on title and artist."
+		b.WriteString("\nNo lyrics provided — interpret based on the title and artist.\n")
 	}
 
-	resp, err := p.callGenerate(ctx, systemPrompt, userPrompt, req.Model)
+	resp, err := p.callGenerate(ctx, systemPrompt, b.String(), req.Model)
 	if err != nil {
 		return nil, err
 	}
 
-	var result DecodeResponse
-	if err := json.Unmarshal([]byte(resp), &result); err != nil {
-		return &DecodeResponse{
-			Meaning: resp,
-			Model:   p.getModel(req.Model),
-		}, nil
-	}
-
-	result.Model = p.getModel(req.Model)
-	return &result, nil
+	return &DecodeResponse{
+		Text:  resp,
+		Model: p.getModel(req.Model),
+	}, nil
 }
 
 // ollamaRequest represents the Ollama API request
@@ -161,11 +162,10 @@ type ollamaResponse struct {
 // callGenerate makes a generation request to Ollama
 func (p *OllamaProvider) callGenerate(ctx context.Context, systemPrompt, userPrompt string, model string) (string, error) {
 	req := ollamaRequest{
-		Model:    p.getModel(model),
-		System:   systemPrompt,
-		Prompt:   userPrompt,
-		Stream:   false,
-		Format:   "json",
+		Model:  p.getModel(model),
+		System: systemPrompt,
+		Prompt: userPrompt,
+		Stream: false,
 		Options: &struct {
 			Temperature float64 `json:"temperature,omitempty"`
 		}{

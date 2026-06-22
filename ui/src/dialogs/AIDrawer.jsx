@@ -109,34 +109,16 @@ const TabPanel = ({ children, value, index }) => {
   return value === index ? <div>{children}</div> : null
 }
 
-// formatDecode turns the structured AI decode response into readable text.
+// formatDecode turns the AI decode response into readable text.
 const formatDecode = (json) => {
   if (!json) return ''
-  const parts = []
-  if (json.meaning) parts.push(json.meaning)
-  if (json.mood) parts.push(`\n🎵 ${json.mood}`)
-  if (json.themes && json.themes.length) {
-    parts.push('\n🏷️ ' + json.themes.join(', '))
-  }
-  if (json.interpretation) parts.push('\n\n' + json.interpretation)
-  return parts.join('\n').trim() || json.description || ''
+  return (json.text || '').trim() || '(no response from model)'
 }
 
-// formatAnalyze turns the structured AI analyze response into readable text.
+// formatAnalyze turns the AI analyze response into readable text.
 const formatAnalyze = (json) => {
   if (!json) return ''
-  const lines = []
-  if (json.genre) lines.push(`🎶 Genre: ${json.genre}`)
-  if (json.mood && json.mood.length)
-    lines.push(`🎭 Mood: ${json.mood.join(', ')}`)
-  if (json.style && json.style.length)
-    lines.push(`🎨 Style: ${json.style.join(', ')}`)
-  if (json.themes && json.themes.length)
-    lines.push(`🏷️ Themes: ${json.themes.join(', ')}`)
-  if (json.similarArtists && json.similarArtists.length)
-    lines.push(`👥 Similar: ${json.similarArtists.join(', ')}`)
-  if (json.description) lines.push(`\n${json.description}`)
-  return lines.join('\n').trim() || JSON.stringify(json, null, 2)
+  return (json.text || '').trim() || '(no response from model)'
 }
 
 const AIDrawer = ({ open, onClose, record }) => {
@@ -158,17 +140,14 @@ const AIDrawer = ({ open, onClose, record }) => {
   }, [record])
 
   const handleTranslate = async () => {
-    if (!record?.lyrics) {
-      notify('ai.warning.noLyrics', { type: 'warning' })
-      return
-    }
-
     setLoading(true)
     try {
       const { json } = await httpClient('/api/ai/translate', {
         method: 'POST',
         body: JSON.stringify({
-          text: record.lyrics,
+          title: record.title,
+          artist: record.artist,
+          lyrics: record.lyrics || '',
           toLang: translateLanguage,
         }),
       })
@@ -308,7 +287,7 @@ const AIDrawer = ({ open, onClose, record }) => {
           {!record.lyrics && (
             <Box className={classes.resultBox}>
               <Typography variant="body2" color="textSecondary">
-                {translate('ai.translate.noLyrics')}
+                {translate('ai.translate.recallHint')}
               </Typography>
             </Box>
           )}
@@ -318,7 +297,7 @@ const AIDrawer = ({ open, onClose, record }) => {
               variant="contained"
               color="primary"
               onClick={handleTranslate}
-              disabled={!record.lyrics || loading}
+              disabled={loading}
               startIcon={loading ? <CircularProgress size={16} /> : <SendIcon />}
               fullWidth
             >

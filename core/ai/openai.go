@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -50,17 +51,33 @@ func (p *OpenAIProvider) Name() string {
 	return "openai"
 }
 
-// Translate translates text using OpenAI
+// Translate recalls (or uses provided) lyrics and translates them to the target language.
+// The response is plain text for broad model compatibility.
 func (p *OpenAIProvider) Translate(ctx context.Context, req *TranslateRequest) (*TranslateResponse, error) {
+	systemPrompt := "You are a music expert and professional translator. " +
+		"Your task is to provide the lyrics of a song and translate them. " +
+		"If you know the song, recall its full lyrics and translate them line by line. " +
+		"If you do not know the song and no lyrics were provided, say so honestly. " +
+		"Always answer in plain text. Format the result as: the original lyrics first " +
+		"(if recalled), a blank line, then a separator '---', a blank line, and the translation. " +
+		"Do not add any other commentary."
+
+	recalled := false
+	var userContent string
+	if strings.TrimSpace(req.Lyrics) != "" {
+		userContent = fmt.Sprintf("Song: %s by %s\n\nHere are the lyrics to translate to %s:\n\n%s",
+			req.Title, req.Artist, langName(req.ToLang), req.Lyrics)
+	} else {
+		recalled = true
+		userContent = fmt.Sprintf("Song: %s by %s\n\n"+
+			"No lyrics were provided. If you know this song, recall its lyrics and then translate them to %s. "+
+			"If you don't know the song, reply: \"I couldn't find the lyrics for this song.\"",
+			req.Title, req.Artist, langName(req.ToLang))
+	}
+
 	messages := []Message{
-		{
-			Role:    "system",
-			Content: "You are a professional translator. Translate the given text to the target language while preserving meaning, tone, and formatting. Only return the translated text, nothing else.",
-		},
-		{
-			Role:    "user",
-			Content: fmt.Sprintf("Translate to %s:\n\n%s", req.ToLang, req.Text),
-		},
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userContent},
 	}
 
 	resp, err := p.callChat(ctx, messages, req.Model)
@@ -70,108 +87,94 @@ func (p *OpenAIProvider) Translate(ctx context.Context, req *TranslateRequest) (
 
 	return &TranslateResponse{
 		Translation: resp,
+		Recalled:    recalled,
 		Model:       p.getModel(req.Model),
 	}, nil
 }
 
-// Analyze analyzes a track using OpenAI
+// Analyze returns a free-form analysis of the track (plain text).
 func (p *OpenAIProvider) Analyze(ctx context.Context, req *AnalyzeRequest) (*AnalyzeResponse, error) {
-	systemPrompt := `You are a music expert AI. Analyze the given track information and provide insights.
-Return a JSON object with the following structure:
-{
-  "genre": "primary genre",
-  "mood": ["mood1", "mood2"],
-  "style": ["style1", "style2"],
-  "themes": ["theme1", "theme2"],
-  "description": "brief description of the track",
-  "similarArtists": ["artist1", "artist2"]
-}`
+	systemPrompt := "You are a knowledgeable music critic. Analyze the given track and write a concise, " +
+		"engaging description covering: likely genre and style, mood and atmosphere, themes, and a few " +
+		"similar artists. Write in plain text using short paragraphs and bullet points. Do not output JSON."
 
-	userPrompt := fmt.Sprintf("Track: %s by %s\nAlbum: %s", req.Title, req.Artist, req.Album)
+	var b strings.Builder
+	fmt.Fprintf(&b, "Track: %s\nArtist: %s\n", req.Title, req.Artist)
+	if req.Album != "" {
+		fmt.Fprintf(&b, "Album: %s\n", req.Album)
+	}
 	if req.Year > 0 {
-		userPrompt += fmt.Sprintf(" (%d)", req.Year)
+		fmt.Fprintf(&b, "Year: %d\n", req.Year)
 	}
 	if req.Genre != "" {
-		userPrompt += fmt.Sprintf("\nOriginal Genre: %s", req.Genre)
+		fmt.Fprintf(&b, "Listed genre: %s\n", req.Genre)
 	}
-	if req.Lyrics != "" {
-		userPrompt += fmt.Sprintf("\nLyrics excerpt: %s", truncateString(req.Lyrics, 500))
+	if strings.TrimSpace(req.Lyrics) != "" {
+		fmt.Fprintf(&b, "\nLyrics excerpt:\n%s\n", truncateString(req.Lyrics, 600))
 	}
 
 	messages := []Message{
-		{
-			Role:    "system",
-			Content: systemPrompt,
-		},
-		{
-			Role:    "user",
-			Content: userPrompt,
-		},
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: b.String()},
 	}
 
-	resp, err := p.callChatJSON(ctx, messages, req.Model)
+	resp, err := p.callChat(ctx, messages, req.Model)
 	if err != nil {
 		return nil, err
 	}
 
-	var result AnalyzeResponse
-	if err := json.Unmarshal([]byte(resp), &result); err != nil {
-		// Fallback: if JSON parsing fails, create a basic response
-		return &AnalyzeResponse{
-			Description: resp,
-			Model:       p.getModel(req.Model),
-		}, nil
-	}
-
-	result.Model = p.getModel(req.Model)
-	return &result, nil
+	return &AnalyzeResponse{
+		Text:  resp,
+		Model: p.getModel(req.Model),
+	}, nil
 }
 
-// Decode analyzes the meaning of a song using OpenAI
+// Decode returns a free-form interpretation of the song's meaning (plain text).
 func (p *OpenAIProvider) Decode(ctx context.Context, req *DecodeRequest) (*DecodeResponse, error) {
-	systemPrompt := `You are a music analyst specializing in song interpretation. Analyze the meaning and mood of the song.
-Return a JSON object with the following structure:
-{
-  "meaning": "overall meaning of the song",
-  "mood": "primary mood",
-  "themes": ["theme1", "theme2"],
-  "interpretation": "detailed interpretation of the song's message"
-}`
+	systemPrompt := "You are a thoughtful music analyst who explains what songs mean. " +
+		"Interpret the song: its overall meaning and message, the mood, the main themes, and a short " +
+		"commentary on what it might be about. Write in plain text using short paragraphs. " +
+		"If you don't know the song well, base your interpretation on the title and artist, and say so. " +
+		"Do not output JSON or empty responses."
 
-	userPrompt := fmt.Sprintf("Song: %s by %s\nAlbum: %s", req.Title, req.Artist, req.Album)
-	if req.Lyrics != "" {
-		userPrompt += fmt.Sprintf("\n\nLyrics:\n%s", req.Lyrics)
+	var b strings.Builder
+	fmt.Fprintf(&b, "Song: %s\nArtist: %s\n", req.Title, req.Artist)
+	if req.Album != "" {
+		fmt.Fprintf(&b, "Album: %s\n", req.Album)
+	}
+	if strings.TrimSpace(req.Lyrics) != "" {
+		fmt.Fprintf(&b, "\nLyrics:\n%s\n", req.Lyrics)
 	} else {
-		userPrompt += "\n\nNo lyrics provided. Analyze based on title and artist."
+		b.WriteString("\nNo lyrics provided — interpret based on the title and artist.\n")
 	}
 
 	messages := []Message{
-		{
-			Role:    "system",
-			Content: systemPrompt,
-		},
-		{
-			Role:    "user",
-			Content: userPrompt,
-		},
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: b.String()},
 	}
 
-	resp, err := p.callChatJSON(ctx, messages, req.Model)
+	resp, err := p.callChat(ctx, messages, req.Model)
 	if err != nil {
 		return nil, err
 	}
 
-	var result DecodeResponse
-	if err := json.Unmarshal([]byte(resp), &result); err != nil {
-		// Fallback
-		return &DecodeResponse{
-			Meaning:        resp,
-			Model:          p.getModel(req.Model),
-		}, nil
-	}
+	return &DecodeResponse{
+		Text:  resp,
+		Model: p.getModel(req.Model),
+	}, nil
+}
 
-	result.Model = p.getModel(req.Model)
-	return &result, nil
+// langName maps a language code to a human-readable name for prompts.
+func langName(code string) string {
+	names := map[string]string{
+		"en": "English", "ru": "Russian", "de": "German", "fr": "French",
+		"es": "Spanish", "it": "Italian", "pt": "Portuguese",
+		"ja": "Japanese", "zh": "Chinese", "ko": "Korean",
+	}
+	if name, ok := names[code]; ok {
+		return name
+	}
+	return code
 }
 
 // Message represents a chat message
