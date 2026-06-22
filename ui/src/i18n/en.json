@@ -418,14 +418,16 @@
         "description": "Configure your AI provider for lyrics translation and track analysis",
         "provider": "AI Provider",
         "apiKey": "API Key",
-        "apiKeyHelp": "Your API key for the selected provider (stored encrypted)",
+        "apiKeyHelp": "Your API key for the selected provider (stored in the database)",
+        "apiKeyMasked": "Leave as is to keep the current key, or type a new one",
         "apiEndpoint": "API Endpoint",
         "apiEndpointHelp": "Custom API endpoint URL (optional)",
         "model": "Model",
         "modelHelp": "Model name to use (e.g., gpt-4o-mini, llama3)",
         "defaultLanguage": "Default Translation Language",
         "saved": "AI settings saved successfully",
-        "error": "Failed to save AI settings"
+        "error": "Failed to save AI settings",
+        "configured": "configured"
       },
       "translate": {
         "title": "Translate Lyrics",

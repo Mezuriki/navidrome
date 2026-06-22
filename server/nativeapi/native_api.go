@@ -279,7 +279,7 @@ func (api *Router) addAIRoute(r chi.Router) {
 			api.aiHandler.UpdateConfig(w, r)
 		})
 		r.Get("/status", func(w http.ResponseWriter, r *http.Request) {
-			api.aiHandler.IsConfigured(w, r)
+			api.aiHandler.Status(w, r)
 		})
 	})
 }

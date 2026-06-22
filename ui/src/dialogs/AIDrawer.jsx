@@ -27,7 +27,8 @@ import {
 } from '@material-ui/icons'
 import { MdPsychology } from 'react-icons/md'
 import { makeStyles } from '@material-ui/core/styles'
-import { useTranslate, useDataProvider, useNotify } from 'react-admin'
+import { useTranslate, useNotify } from 'react-admin'
+import { httpClient } from '../dataProvider'
 import config from '../config'
 
 const useStyles = makeStyles((theme) => ({
@@ -108,11 +109,40 @@ const TabPanel = ({ children, value, index }) => {
   return value === index ? <div>{children}</div> : null
 }
 
+// formatDecode turns the structured AI decode response into readable text.
+const formatDecode = (json) => {
+  if (!json) return ''
+  const parts = []
+  if (json.meaning) parts.push(json.meaning)
+  if (json.mood) parts.push(`\n🎵 ${json.mood}`)
+  if (json.themes && json.themes.length) {
+    parts.push('\n🏷️ ' + json.themes.join(', '))
+  }
+  if (json.interpretation) parts.push('\n\n' + json.interpretation)
+  return parts.join('\n').trim() || json.description || ''
+}
+
+// formatAnalyze turns the structured AI analyze response into readable text.
+const formatAnalyze = (json) => {
+  if (!json) return ''
+  const lines = []
+  if (json.genre) lines.push(`🎶 Genre: ${json.genre}`)
+  if (json.mood && json.mood.length)
+    lines.push(`🎭 Mood: ${json.mood.join(', ')}`)
+  if (json.style && json.style.length)
+    lines.push(`🎨 Style: ${json.style.join(', ')}`)
+  if (json.themes && json.themes.length)
+    lines.push(`🏷️ Themes: ${json.themes.join(', ')}`)
+  if (json.similarArtists && json.similarArtists.length)
+    lines.push(`👥 Similar: ${json.similarArtists.join(', ')}`)
+  if (json.description) lines.push(`\n${json.description}`)
+  return lines.join('\n').trim() || JSON.stringify(json, null, 2)
+}
+
 const AIDrawer = ({ open, onClose, record }) => {
   const classes = useStyles()
   const translate = useTranslate()
   const notify = useNotify()
-  const dataProvider = useDataProvider()
   const [tabValue, setTabValue] = useState(0)
   const [translateLanguage, setTranslateLanguage] = useState('ru')
   const [translationResult, setTranslationResult] = useState('')
@@ -135,14 +165,19 @@ const AIDrawer = ({ open, onClose, record }) => {
 
     setLoading(true)
     try {
-      const result = await dataProvider.aiTranslate(record.id, {
-        lyrics: record.lyrics,
-        targetLang: translateLanguage,
+      const { json } = await httpClient('/api/ai/translate', {
+        method: 'POST',
+        body: JSON.stringify({
+          text: record.lyrics,
+          toLang: translateLanguage,
+        }),
       })
-      setTranslationResult(result.data.translation)
+      setTranslationResult(json.translation)
       notify('ai.success.translate', { type: 'success' })
     } catch (error) {
-      notify(`ai.error.translate: ${error.message}`, { type: 'error' })
+      notify(translate('ai.error.translate') + ': ' + error.message, {
+        type: 'error',
+      })
     } finally {
       setLoading(false)
     }
@@ -151,16 +186,21 @@ const AIDrawer = ({ open, onClose, record }) => {
   const handleDecode = async () => {
     setLoading(true)
     try {
-      const result = await dataProvider.aiDecode(record.id, {
-        title: record.title,
-        artist: record.artist,
-        album: record.album,
-        lyrics: record.lyrics || '',
+      const { json } = await httpClient('/api/ai/decode', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: record.title,
+          artist: record.artist,
+          album: record.album,
+          lyrics: record.lyrics || '',
+        }),
       })
-      setDecodeResult(result.data.analysis)
+      setDecodeResult(formatDecode(json))
       notify('ai.success.decode', { type: 'success' })
     } catch (error) {
-      notify(`ai.error.decode: ${error.message}`, { type: 'error' })
+      notify(translate('ai.error.decode') + ': ' + error.message, {
+        type: 'error',
+      })
     } finally {
       setLoading(false)
     }
@@ -169,18 +209,23 @@ const AIDrawer = ({ open, onClose, record }) => {
   const handleAnalyze = async () => {
     setLoading(true)
     try {
-      const result = await dataProvider.aiAnalyze(record.id, {
-        title: record.title,
-        artist: record.artist,
-        album: record.album,
-        year: record.year,
-        genre: record.genre,
-        lyrics: record.lyrics || '',
+      const { json } = await httpClient('/api/ai/analyze', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: record.title,
+          artist: record.artist,
+          album: record.album,
+          year: record.year,
+          genre: record.genre,
+          lyrics: record.lyrics || '',
+        }),
       })
-      setAnalyzeResult(result.data.analysis)
+      setAnalyzeResult(formatAnalyze(json))
       notify('ai.success.analyze', { type: 'success' })
     } catch (error) {
-      notify(`ai.error.analyze: ${error.message}`, { type: 'error' })
+      notify(translate('ai.error.analyze') + ': ' + error.message, {
+        type: 'error',
+      })
     } finally {
       setLoading(false)
     }

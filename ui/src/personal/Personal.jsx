@@ -20,19 +20,21 @@ const Personal = () => {
   const classes = useStyles()
 
   return (
-    <Card className={classes.root}>
+    <>
       <Title title={'Navidrome - ' + translate('menu.personal.name')} />
-      <SimpleForm toolbar={null} variant={'outlined'}>
-        <SelectTheme />
-        <SelectLanguage />
-        <SelectDefaultView />
-        {config.enableReplayGain && <ReplayGainToggle />}
-        <NotificationsToggle />
-        {config.lastFMEnabled && <LastfmScrobbleToggle />}
-        {config.listenBrainzEnabled && <ListenBrainzScrobbleToggle />}
-        <AIConfig />
-      </SimpleForm>
-    </Card>
+      <Card className={classes.root}>
+        <SimpleForm toolbar={null} variant={'outlined'}>
+          <SelectTheme />
+          <SelectLanguage />
+          <SelectDefaultView />
+          {config.enableReplayGain && <ReplayGainToggle />}
+          <NotificationsToggle />
+          {config.lastFMEnabled && <LastfmScrobbleToggle />}
+          {config.listenBrainzEnabled && <ListenBrainzScrobbleToggle />}
+        </SimpleForm>
+      </Card>
+      <AIConfig />
+    </>
   )
 }
 

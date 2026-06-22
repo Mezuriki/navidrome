@@ -1,41 +1,49 @@
 import React, { useState, useEffect } from 'react'
-import PropTypes from 'prop-types'
 import {
-  SimpleForm,
-  TextInput,
-  SelectInput,
-  useDataProvider,
-  useNotify,
-  useTranslate,
-  SaveContextProvider,
-} from 'react-admin'
-import { Typography, Box, Card, CardContent } from '@material-ui/core'
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
+  Typography,
+  Box,
+} from '@material-ui/core'
+import { MdPsychology, MdSave } from 'react-icons/md'
 import { makeStyles } from '@material-ui/core/styles'
-import { MdPsychology as AIIcon } from 'react-icons/md'
+import { useNotify, useTranslate } from 'react-admin'
+import { httpClient } from '../dataProvider'
 
-const useStyles = makeStyles({
-  root: { marginTop: '1em' },
+const KEY_MASK = '********'
+
+const useStyles = makeStyles((theme) => ({
+  root: { marginTop: '2em', width: '100%' },
   header: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    marginBottom: '16px',
+    marginBottom: theme.spacing(1),
   },
-  infoText: {
-    color: 'rgba(0, 0, 0, 0.54)',
-    fontSize: '0.875rem',
-    marginTop: '8px',
-    marginBottom: '16px',
+  field: {
+    marginTop: theme.spacing(2),
+    width: '100%',
   },
-  section: {
-    marginBottom: '20px',
+  saveButton: {
+    marginTop: theme.spacing(3),
   },
-})
+  statusChip: {
+    fontSize: '0.8rem',
+    marginLeft: theme.spacing(1),
+  },
+}))
 
 const AIProviderChoices = [
-  { id: 'openai', name: 'OpenAI (GPT-4, GPT-3.5)' },
+  { id: 'openai', name: 'OpenAI (GPT-4o, GPT-3.5)' },
   { id: 'anthropic', name: 'Anthropic (Claude)' },
-  { id: 'ollama', name: 'Ollama (Local)' },
+  { id: 'ollama', name: 'Ollama (local)' },
   { id: 'localai', name: 'LocalAI' },
   { id: 'openrouter', name: 'OpenRouter' },
 ]
@@ -53,129 +61,188 @@ const DefaultLanguageChoices = [
   { id: 'ko', name: '한국어' },
 ]
 
+const placeholders = {
+  openai: { apiEndpoint: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+  anthropic: {
+    apiEndpoint: 'https://api.anthropic.com/v1',
+    model: 'claude-3-5-sonnet-20241022',
+  },
+  ollama: { apiEndpoint: 'http://localhost:11434/api', model: 'llama3' },
+  localai: { apiEndpoint: 'http://localhost:8080/v1', model: 'gpt-3.5-turbo' },
+  openrouter: {
+    apiEndpoint: 'https://openrouter.ai/api/v1',
+    model: 'openai/gpt-4o-mini',
+  },
+}
+
 const AIConfig = () => {
   const classes = useStyles()
   const translate = useTranslate()
   const notify = useNotify()
-  const dataProvider = useDataProvider()
+
   const [loading, setLoading] = useState(true)
-  const [config, setConfig] = useState({
+  const [saving, setSaving] = useState(false)
+  const [configured, setConfigured] = useState(false)
+  const [form, setForm] = useState({
     provider: '',
     apiKey: '',
     apiEndpoint: '',
     model: '',
-    defaultLanguage: 'en',
+    defaultLanguage: 'ru',
   })
 
   useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const result = await dataProvider.getAIConfig()
-        setConfig(result.data || {})
-      } catch (error) {
-        console.error('Failed to load AI config:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchConfig()
-  }, [dataProvider])
+    httpClient('/api/ai/config')
+      .then(({ json }) => {
+        setConfigured(json.configured === true)
+        setForm({
+          provider: json.provider || '',
+          apiKey: json.apiKey || '',
+          apiEndpoint: json.apiEndpoint || '',
+          model: json.model || '',
+          defaultLanguage: json.defaultLanguage || 'ru',
+        })
+      })
+      .catch(() => notify('ai.config.error', { type: 'warning' }))
+      .finally(() => setLoading(false))
+  }, [notify])
 
-  const handleSubmit = async (values) => {
-    try {
-      await dataProvider.saveAIConfig({ data: values })
-      notify('ai.config.saved', { type: 'success' })
-    } catch (error) {
-      notify(`ai.config.error: ${error.message}`, { type: 'error' })
-    }
+  const setField = (field) => (e) =>
+    setForm((f) => ({ ...f, [field]: e.target.value }))
+
+  const handleProviderChange = (e) => {
+    const provider = e.target.value
+    const ph = placeholders[provider] || {}
+    setForm((f) => ({
+      ...f,
+      provider,
+      apiEndpoint: ph.apiEndpoint || f.apiEndpoint,
+      model: ph.model || f.model,
+    }))
   }
 
-  const getPlaceholderForProvider = (field) => {
-    const placeholders = {
-      openai: {
-        apiEndpoint: 'https://api.openai.com/v1',
-        model: 'gpt-4o-mini',
-      },
-      anthropic: {
-        apiEndpoint: 'https://api.anthropic.com/v1',
-        model: 'claude-3-5-sonnet-20241022',
-      },
-      ollama: {
-        apiEndpoint: 'http://localhost:11434/api',
-        model: 'llama3',
-      },
-      localai: {
-        apiEndpoint: 'http://localhost:8080/v1',
-        model: 'ggml-gpt4all-j',
-      },
-      openrouter: {
-        apiEndpoint: 'https://openrouter.ai/api/v1',
-        model: 'anthropic/claude-3.5-sonnet',
-      },
-    }
-    return placeholders[config.provider]?.[field] || ''
+  const handleSave = (e) => {
+    e.preventDefault()
+    setSaving(true)
+    httpClient('/api/ai/config', {
+      method: 'PUT',
+      body: JSON.stringify(form),
+    })
+      .then(() => {
+        notify('ai.config.saved', { type: 'success' })
+        setConfigured(true)
+      })
+      .catch((err) =>
+        notify(translate('ai.config.error') + ': ' + err.message, {
+          type: 'error',
+        }),
+      )
+      .finally(() => setSaving(false))
   }
 
-  if (loading) return null
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" p={2}>
+        <CircularProgress size={24} />
+      </Box>
+    )
+  }
 
   return (
     <Card className={classes.root}>
       <CardContent>
         <Box className={classes.header}>
-          <AIIcon color="primary" />
+          <MdPsychology size={20} />
           <Typography variant="h6">
             {translate('ai.config.title')}
           </Typography>
+          {configured && (
+            <Typography
+              variant="caption"
+              className={classes.statusChip}
+              color="primary"
+            >
+              ✓ {translate('ai.config.configured')}
+            </Typography>
+          )}
         </Box>
-
-        <Typography variant="body2" className={classes.infoText}>
+        <Typography variant="body2" color="textSecondary">
           {translate('ai.config.description')}
         </Typography>
 
-        <SaveContextProvider value={{ save: handleSubmit }}>
-          <SimpleForm toolbar={null} variant="outlined" onSubmit={handleSubmit}>
-            <SelectInput
-              source="provider"
-              label={translate('ai.config.provider')}
-              choices={AIProviderChoices}
-              defaultValue={config.provider}
-              fullWidth
-            />
+        <form onSubmit={handleSave}>
+          <FormControl className={classes.field} variant="outlined">
+            <InputLabel>{translate('ai.config.provider')}</InputLabel>
+            <Select value={form.provider} onChange={handleProviderChange} label={translate('ai.config.provider')}>
+              {AIProviderChoices.map((p) => (
+                <MenuItem key={p.id} value={p.id}>
+                  {p.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
-            <TextInput
-              source="apiKey"
-              label={translate('ai.config.apiKey')}
-              defaultValue={config.apiKey}
-              type="password"
-              fullWidth
-              helperText={translate('ai.config.apiKeyHelp')}
-            />
+          <TextField
+            className={classes.field}
+            label={translate('ai.config.apiKey')}
+            type="password"
+            variant="outlined"
+            value={form.apiKey}
+            onChange={setField('apiKey')}
+            placeholder={form.provider === 'ollama' ? '(not required for Ollama)' : ''}
+            helperText={
+              form.apiKey === KEY_MASK
+                ? translate('ai.config.apiKeyMasked')
+                : translate('ai.config.apiKeyHelp')
+            }
+          />
 
-            <TextInput
-              source="apiEndpoint"
-              label={translate('ai.config.apiEndpoint')}
-              defaultValue={config.apiEndpoint || getPlaceholderForProvider('apiEndpoint')}
-              fullWidth
-              helperText={translate('ai.config.apiEndpointHelp')}
-            />
+          <TextField
+            className={classes.field}
+            label={translate('ai.config.apiEndpoint')}
+            variant="outlined"
+            value={form.apiEndpoint}
+            onChange={setField('apiEndpoint')}
+            helperText={translate('ai.config.apiEndpointHelp')}
+          />
 
-            <TextInput
-              source="model"
-              label={translate('ai.config.model')}
-              defaultValue={config.model || getPlaceholderForProvider('model')}
-              fullWidth
-              helperText={translate('ai.config.modelHelp')}
-            />
+          <TextField
+            className={classes.field}
+            label={translate('ai.config.model')}
+            variant="outlined"
+            value={form.model}
+            onChange={setField('model')}
+            helperText={translate('ai.config.modelHelp')}
+          />
 
-            <SelectInput
-              source="defaultLanguage"
+          <FormControl className={classes.field} variant="outlined">
+            <InputLabel>{translate('ai.config.defaultLanguage')}</InputLabel>
+            <Select
+              value={form.defaultLanguage}
+              onChange={setField('defaultLanguage')}
               label={translate('ai.config.defaultLanguage')}
-              choices={DefaultLanguageChoices}
-              defaultValue={config.defaultLanguage || 'en'}
-              fullWidth
-            />
-          </SimpleForm>
-        </SaveContextProvider>
+            >
+              {DefaultLanguageChoices.map((l) => (
+                <MenuItem key={l.id} value={l.id}>
+                  {l.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <Button
+            type="submit"
+            variant="contained"
+            color="primary"
+            className={classes.saveButton}
+            disabled={saving || !form.provider}
+            startIcon={
+              saving ? <CircularProgress size={16} /> : <MdSave />
+            }
+          >
+            {translate('ra.action.save')}
+          </Button>
+        </form>
       </CardContent>
     </Card>
   )
