@@ -50,20 +50,20 @@ func (p *OllamaProvider) Name() string {
 // Translate translates text using Ollama (strict prompt)
 func (p *OllamaProvider) Translate(ctx context.Context, req *TranslateRequest) (*TranslateResponse, error) {
 	systemPrompt := "You translate song lyrics. Follow these rules exactly:\n" +
-		"1. If lyrics are provided, translate ONLY those lyrics to the target language. Do not add or invent anything.\n" +
+		"1. If real lyrics are provided, translate ONLY those lyrics to the target language. Do not add or invent anything.\n" +
 		"2. If no lyrics are provided and you are confident you know the song, write the original lyrics first, then a single line containing exactly ---, then the translation.\n" +
 		"3. If you do not actually know the song, output exactly: I could not find the lyrics for this song.\n" +
 		"4. Output only the result. No explanations, no preamble, no notes, no markdown."
 
-	recalled := false
+	lyrics := normalizeLyrics(req.Lyrics)
+	recalled := lyrics == ""
 	var prompt string
-	if strings.TrimSpace(req.Lyrics) != "" {
-		prompt = fmt.Sprintf("Translate the following lyrics to %s. Output only the translation:\n\n%s",
-			langName(req.ToLang), req.Lyrics)
+	if !recalled {
+		prompt = fmt.Sprintf("Song: \"%s\" by \"%s\".\n\nTranslate the lyrics below to %s. Output only the translation:\n\n%s",
+			req.Title, req.Artist, langName(req.ToLang), lyrics)
 	} else {
-		recalled = true
 		prompt = fmt.Sprintf("Song: \"%s\" by \"%s\".\n"+
-			"No lyrics were provided. If you know this song well, output the original lyrics, then a line with ---, then the %s translation. "+
+			"No lyrics were provided. If you know this song, output the original lyrics, then a line with ---, then the %s translation. "+
 			"If you do not actually know this song, output exactly: I could not find the lyrics for this song.",
 			req.Title, req.Artist, langName(req.ToLang))
 	}
@@ -74,7 +74,7 @@ func (p *OllamaProvider) Translate(ctx context.Context, req *TranslateRequest) (
 	}
 
 	return &TranslateResponse{
-		Translation: strings.TrimSpace(resp),
+		Translation: stripThinking(resp),
 		Recalled:    recalled,
 		Model:       p.getModel(req.Model),
 	}, nil
@@ -107,7 +107,7 @@ func (p *OllamaProvider) Analyze(ctx context.Context, req *AnalyzeRequest) (*Ana
 	}
 
 	return &AnalyzeResponse{
-		Text:  resp,
+		Text:  stripThinking(resp),
 		Model: p.getModel(req.Model),
 	}, nil
 }
@@ -136,7 +136,7 @@ func (p *OllamaProvider) Decode(ctx context.Context, req *DecodeRequest) (*Decod
 	}
 
 	return &DecodeResponse{
-		Text:  resp,
+		Text:  stripThinking(resp),
 		Model: p.getModel(req.Model),
 	}, nil
 }

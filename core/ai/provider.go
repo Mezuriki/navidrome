@@ -1,6 +1,10 @@
 package ai
 
-import "context"
+import (
+	"context"
+	"regexp"
+	"strings"
+)
 
 // LLMProvider defines the interface for AI/LLM providers
 type LLMProvider interface {
@@ -82,4 +86,27 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// normalizeLyrics returns empty string for values that represent "no lyrics"
+// (empty, "[]", "null", etc.), which is how Navidrome serializes an empty
+// lyric list in the MediaFile datagrid payload.
+func normalizeLyrics(s string) string {
+	s = strings.TrimSpace(s)
+	switch s {
+	case "", "[]", "[ ]", "null", `""`, `''`:
+		return ""
+	}
+	return s
+}
+
+// thinkRe matches reasoning/thinking blocks that some models (Qwen3, DeepSeek-R1)
+// emit inline, e.g. <think>...</think>. We strip them so the user only sees the
+// final answer.
+var thinkRe = regexp.MustCompile(`(?is)<think>.*?</think>`)
+
+// stripThinking removes <think>...</think> blocks and trims whitespace.
+func stripThinking(s string) string {
+	s = thinkRe.ReplaceAllString(s, "")
+	return strings.TrimSpace(s)
 }
