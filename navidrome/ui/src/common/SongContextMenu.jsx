@@ -10,8 +10,7 @@ import {
 import { IconButton, Menu, MenuItem } from '@material-ui/core'
 import { makeStyles } from '@material-ui/core/styles'
 import MoreVertIcon from '@material-ui/icons/MoreVert'
-import { MdQuestionMark } from 'react-icons/md'
-import { Psychology as AIIcon } from '@material-ui/icons'
+import { MdQuestionMark, MdPsychology } from 'react-icons/md'
 import clsx from 'clsx'
 import {
   playNext,

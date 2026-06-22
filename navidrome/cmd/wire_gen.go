@@ -13,6 +13,7 @@ import (
 	"github.com/navidrome/navidrome/adapters/listenbrainz"
 	"github.com/navidrome/navidrome/core"
 	"github.com/navidrome/navidrome/core/agents"
+	"github.com/navidrome/navidrome/core/ai"
 	"github.com/navidrome/navidrome/core/artwork"
 	"github.com/navidrome/navidrome/core/external"
 	"github.com/navidrome/navidrome/core/ffmpeg"
@@ -82,7 +83,8 @@ func CreateNativeAPIRouter(ctx context.Context) *nativeapi.Router {
 	library := core.NewLibrary(dataStore, modelScanner, watcher, broker, manager)
 	user := core.NewUser(dataStore, manager)
 	maintenance := core.NewMaintenance(dataStore)
-	router := nativeapi.New(dataStore, share, playlistsPlaylists, insights, library, user, maintenance, manager, imageUploadService)
+	aiService := ai.NewService()
+	router := nativeapi.New(dataStore, share, playlistsPlaylists, insights, library, user, maintenance, manager, imageUploadService, aiService)
 	return router
 }
 

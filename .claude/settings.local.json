@@ -11,7 +11,17 @@
       "Bash(git commit *)",
       "Bash(curl *)",
       "Bash(git remote *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git checkout *)",
+      "Bash(git rm *)",
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(go build *)",
+      "Bash(docker --version)",
+      "Bash(docker build *)",
+      "Bash(sudo docker build -t navidrome-ai .)",
+      "Bash(sudo docker images)",
+      "Bash(sudo docker ps -a)"
     ]
   }
 }
