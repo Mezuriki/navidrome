@@ -67,7 +67,10 @@ const placeholders = {
     apiEndpoint: 'https://api.anthropic.com/v1',
     model: 'claude-3-5-sonnet-20241022',
   },
-  ollama: { apiEndpoint: 'http://localhost:11434/api', model: 'llama3' },
+  ollama: {
+    apiEndpoint: 'http://localhost:11434/v1',
+    model: 'codellama:7b-instruct',
+  },
   localai: { apiEndpoint: 'http://localhost:8080/v1', model: 'gpt-3.5-turbo' },
   openrouter: {
     apiEndpoint: 'https://openrouter.ai/api/v1',

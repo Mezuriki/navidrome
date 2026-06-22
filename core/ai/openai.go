@@ -23,12 +23,10 @@ type OpenAIProvider struct {
 	model      string
 }
 
-// NewOpenAIProvider creates a new OpenAI provider
+// NewOpenAIProvider creates a new OpenAI-compatible provider.
+// The apiKey is optional — local OpenAI-compatible servers (Ollama, LocalAI)
+// do not require one.
 func NewOpenAIProvider(apiKey, endpoint, model string) (*OpenAIProvider, error) {
-	if apiKey == "" {
-		return nil, fmt.Errorf("API key is required")
-	}
-
 	if endpoint == "" {
 		endpoint = defaultOpenAIEndpoint
 	}
@@ -39,7 +37,7 @@ func NewOpenAIProvider(apiKey, endpoint, model string) (*OpenAIProvider, error) 
 
 	return &OpenAIProvider{
 		client: &http.Client{
-			Timeout: 60 * time.Second,
+			Timeout: 120 * time.Second,
 		},
 		apiKey:   apiKey,
 		endpoint: endpoint,
@@ -242,7 +240,10 @@ func (p *OpenAIProvider) callChatJSON(ctx context.Context, messages []Message, m
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	// Some local servers (Ollama, LocalAI) don't require a key; only send it if set.
+	if p.apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	}
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {

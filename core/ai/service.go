@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/navidrome/navidrome/log"
@@ -133,27 +134,46 @@ func (s *Service) Decode(ctx context.Context, userId string, req *DecodeRequest)
 }
 
 // IsConfigured returns whether the user has a provider configured.
+// Local providers (ollama, localai) don't require an API key.
 func (s *Service) IsConfigured(ctx context.Context, userId string) bool {
 	cfg, err := s.GetConfig(ctx, userId)
 	if err != nil {
 		return false
 	}
-	return cfg.Provider != "" && (cfg.APIKey != "" || cfg.Provider == "ollama")
+	if cfg.Provider == "" {
+		return false
+	}
+	switch cfg.Provider {
+	case "ollama", "localai":
+		return cfg.APIEndpoint != ""
+	default:
+		return cfg.APIKey != ""
+	}
 }
 
 // createProvider creates a provider instance based on config.
 func (s *Service) createProvider(config Config) (LLMProvider, error) {
 	switch config.Provider {
-	case "openai", "localai", "openrouter":
-		return NewOpenAIProvider(config.APIKey, config.APIEndpoint, config.Model)
 	case "ollama":
+		// If the endpoint points at Ollama's OpenAI-compatible API (ends in /v1),
+		// use the OpenAI-compatible client which talks to /chat/completions.
+		// Otherwise fall back to Ollama's native /api/generate endpoint.
+		if isOpenAICompatible(config.APIEndpoint) {
+			return NewOpenAIProvider(config.APIKey, config.APIEndpoint, config.Model)
+		}
 		return NewOllamaProvider(config.APIEndpoint, config.Model)
-	case "anthropic":
-		// Anthropic is OpenAI-compatible through its /v1 endpoint for this use case.
+	case "openai", "localai", "openrouter", "anthropic":
+		// All of these expose an OpenAI-compatible /v1/chat/completions endpoint.
 		return NewOpenAIProvider(config.APIKey, config.APIEndpoint, config.Model)
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", config.Provider)
 	}
+}
+
+// isOpenAICompatible reports whether the endpoint exposes an OpenAI-compatible
+// API (i.e. ends in /v1, in which case requests go to /v1/chat/completions).
+func isOpenAICompatible(endpoint string) bool {
+	return strings.HasSuffix(strings.TrimRight(endpoint, "/"), "/v1")
 }
 
 // GetSupportedProviders returns a list of supported provider names.
