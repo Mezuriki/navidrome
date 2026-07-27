@@ -12,7 +12,7 @@ import {
   Typography,
   Box,
 } from '@material-ui/core'
-import { MdPsychology, MdSave } from 'react-icons/md'
+import { MdPsychology, MdSave, MdPlaylistAddCheck } from 'react-icons/md'
 import { makeStyles } from '@material-ui/core/styles'
 import { useNotify, useTranslate } from 'react-admin'
 import { httpClient } from '../dataProvider'
@@ -34,6 +34,11 @@ const useStyles = makeStyles((theme) => ({
   saveButton: {
     marginTop: theme.spacing(3),
   },
+  buttonRow: {
+    display: 'flex',
+    gap: theme.spacing(1),
+    marginTop: theme.spacing(3),
+  },
   statusChip: {
     fontSize: '0.8rem',
     marginLeft: theme.spacing(1),
@@ -41,6 +46,7 @@ const useStyles = makeStyles((theme) => ({
 }))
 
 const AIProviderChoices = [
+  { id: 'gemini', name: 'Google Gemini (3.5 Flash)' },
   { id: 'openai', name: 'OpenAI (GPT-4o, GPT-3.5)' },
   { id: 'anthropic', name: 'Anthropic (Claude)' },
   { id: 'ollama', name: 'Ollama (local)' },
@@ -62,6 +68,10 @@ const DefaultLanguageChoices = [
 ]
 
 const placeholders = {
+  gemini: {
+    apiEndpoint: 'https://generativelanguage.googleapis.com',
+    model: 'gemini-3.5-flash',
+  },
   openai: { apiEndpoint: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   anthropic: {
     apiEndpoint: 'https://api.anthropic.com/v1',
@@ -85,6 +95,7 @@ const AIConfig = () => {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
   const [configured, setConfigured] = useState(false)
   const [form, setForm] = useState({
     provider: '',
@@ -141,6 +152,34 @@ const AIConfig = () => {
         }),
       )
       .finally(() => setSaving(false))
+  }
+
+  const handleTest = (e) => {
+    e.preventDefault()
+    setTesting(true)
+    // Send the current form values. The masked key placeholder tells the
+    // backend to use the stored key, so testing works after a page reload
+    // even without re-entering the secret.
+    httpClient('/api/ai/test', {
+      method: 'POST',
+      body: JSON.stringify(form),
+    })
+      .then(({ json }) => {
+        if (json && json.ok) {
+          notify('ai.test.success', { type: 'success' })
+        } else {
+          const msg = (json && json.error) || translate('ai.test.unknownError')
+          notify(translate('ai.test.failed') + ': ' + msg, {
+            type: 'error',
+          })
+        }
+      })
+      .catch((err) =>
+        notify(translate('ai.test.failed') + ': ' + err.message, {
+          type: 'error',
+        }),
+      )
+      .finally(() => setTesting(false))
   }
 
   if (loading) {
@@ -233,18 +272,28 @@ const AIConfig = () => {
             </Select>
           </FormControl>
 
-          <Button
-            type="submit"
-            variant="contained"
-            color="primary"
-            className={classes.saveButton}
-            disabled={saving || !form.provider}
-            startIcon={
-              saving ? <CircularProgress size={16} /> : <MdSave />
-            }
-          >
-            {translate('ra.action.save')}
-          </Button>
+          <Box className={classes.buttonRow}>
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              disabled={saving || !form.provider}
+              startIcon={saving ? <CircularProgress size={16} /> : <MdSave />}
+            >
+              {translate('ra.action.save')}
+            </Button>
+            <Button
+              variant="outlined"
+              color="primary"
+              disabled={testing || !form.provider}
+              startIcon={
+                testing ? <CircularProgress size={16} /> : <MdPlaylistAddCheck />
+              }
+              onClick={handleTest}
+            >
+              {translate('ai.test.action')}
+            </Button>
+          </Box>
         </form>
       </CardContent>
     </Card>

@@ -30,6 +30,7 @@ const defaultConfig = {
   devSidebarPlaylists: true,
   lastFMEnabled: true,
   listenBrainzEnabled: true,
+  enableAI: true,
   enableExternalServices: true,
   enableCoverAnimation: true,
   enableNowPlaying: true,

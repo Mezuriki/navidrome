@@ -9,6 +9,14 @@ export const PLAYER_SET_VOLUME = 'PLAYER_SET_VOLUME'
 export const PLAYER_SET_MODE = 'PLAYER_SET_MODE'
 export const TRANSCODING_SET_PROFILE = 'TRANSCODING_SET_PROFILE'
 export const PLAYER_REFRESH_QUEUE = 'PLAYER_REFRESH_QUEUE'
+export const PLAYER_SET_LYRIC_LANG = 'PLAYER_SET_LYRIC_LANG'
+
+// Switch the lyric language shown in the player panel. `lang` is 'original'
+// (the main track) or a language code like 'ru' (a translation track).
+export const setLyricLang = (lang) => ({
+  type: PLAYER_SET_LYRIC_LANG,
+  lang,
+})
 
 export const setTrack = (data) => ({
   type: PLAYER_SET_TRACK,

@@ -25,7 +25,7 @@ import {
   Info as AnalyzeIcon,
   Send as SendIcon,
 } from '@material-ui/icons'
-import { MdPsychology } from 'react-icons/md'
+import { MdPsychology, MdLyrics } from 'react-icons/md'
 import { makeStyles } from '@material-ui/core/styles'
 import { useTranslate, useNotify } from 'react-admin'
 import { httpClient } from '../dataProvider'
@@ -121,6 +121,28 @@ const formatAnalyze = (json) => {
   return (json.text || '').trim() || '(no response from model)'
 }
 
+// aiErrorMessage extracts a human-readable message from an httpClient error.
+// The backend returns JSON {error, retryable} for AI failures; react-admin's
+// fetchJson puts the raw body in error.message, so we try to parse it. When the
+// error is retryable (quota / rate limit), we surface a clear "try later" hint.
+const aiErrorMessage = (error, translate) => {
+  let msg = error?.message || ''
+  let retryable = false
+  try {
+    const parsed = JSON.parse(msg)
+    if (parsed && typeof parsed === 'object') {
+      msg = parsed.error || msg
+      retryable = !!parsed.retryable
+    }
+  } catch {
+    // not JSON — fall back to the raw message
+  }
+  if (retryable) {
+    return translate('ai.error.quota')
+  }
+  return msg
+}
+
 const AIDrawer = ({ open, onClose, record }) => {
   const classes = useStyles()
   const translate = useTranslate()
@@ -131,13 +153,66 @@ const AIDrawer = ({ open, onClose, record }) => {
   const [decodeResult, setDecodeResult] = useState('')
   const [analyzeResult, setAnalyzeResult] = useState('')
   const [loading, setLoading] = useState(false)
+  const [lyricsStatus, setLyricsStatus] = useState(null)
+  const [lyricsFetching, setLyricsFetching] = useState(false)
 
-  // Reset results when record changes
+  // When the record changes, load any previously persisted AI results from
+  // sidecar files so the drawer is not empty on open.
   useEffect(() => {
     setTranslationResult('')
     setDecodeResult('')
     setAnalyzeResult('')
+    setLyricsStatus(null)
+    if (!record || !record.id) return
+    const id = encodeURIComponent(record.id)
+    // Translate (ru by default)
+    httpClient(`/api/ai/translate?mediaFileId=${id}&lang=ru`)
+      .then(({ json }) => {
+        if (json && json.found && json.text) setTranslationResult(json.text)
+      })
+      .catch(() => {})
+    // Decode
+    httpClient(`/api/ai/decode?mediaFileId=${id}`)
+      .then(({ json }) => {
+        if (json && json.found && json.text) setDecodeResult(json.text)
+      })
+      .catch(() => {})
+    // Analyze
+    httpClient(`/api/ai/analyze?mediaFileId=${id}`)
+      .then(({ json }) => {
+        if (json && json.found && json.text) setAnalyzeResult(json.text)
+      })
+      .catch(() => {})
   }, [record])
+
+  // Poll the lyrics fetch status while a task is queued or running.
+  useEffect(() => {
+    if (!record || !record.id) return
+    if (
+      !lyricsStatus ||
+      (lyricsStatus.status !== 'queued' && lyricsStatus.status !== 'running')
+    ) {
+      return
+    }
+    const timer = setInterval(() => {
+      httpClient(
+        `/api/ai/lyrics/status?mediaFileId=${encodeURIComponent(record.id)}`,
+      )
+        .then(({ json }) => setLyricsStatus(json))
+        .catch(() => {})
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [record, lyricsStatus])
+
+  // Load the existing lyrics status when the Lyrics tab is first opened.
+  useEffect(() => {
+    if (tabValue !== 3 || !record || !record.id || lyricsStatus) return
+    httpClient(
+      `/api/ai/lyrics/status?mediaFileId=${encodeURIComponent(record.id)}`,
+    )
+      .then(({ json }) => setLyricsStatus(json))
+      .catch(() => {})
+  }, [tabValue, record, lyricsStatus])
 
   const handleTranslate = async () => {
     setLoading(true)
@@ -149,12 +224,13 @@ const AIDrawer = ({ open, onClose, record }) => {
           artist: record.artist,
           lyrics: record.lyrics || '',
           toLang: translateLanguage,
+          mediaFileId: record.id,
         }),
       })
       setTranslationResult(json.translation)
       notify('ai.success.translate', { type: 'success' })
     } catch (error) {
-      notify(translate('ai.error.translate') + ': ' + error.message, {
+      notify(translate('ai.error.translate') + ': ' + aiErrorMessage(error, translate), {
         type: 'error',
       })
     } finally {
@@ -172,12 +248,13 @@ const AIDrawer = ({ open, onClose, record }) => {
           artist: record.artist,
           album: record.album,
           lyrics: record.lyrics || '',
+          mediaFileId: record.id,
         }),
       })
       setDecodeResult(formatDecode(json))
       notify('ai.success.decode', { type: 'success' })
     } catch (error) {
-      notify(translate('ai.error.decode') + ': ' + error.message, {
+      notify(translate('ai.error.decode') + ': ' + aiErrorMessage(error, translate), {
         type: 'error',
       })
     } finally {
@@ -197,18 +274,42 @@ const AIDrawer = ({ open, onClose, record }) => {
           year: record.year,
           genre: record.genre,
           lyrics: record.lyrics || '',
+          mediaFileId: record.id,
         }),
       })
       setAnalyzeResult(formatAnalyze(json))
       notify('ai.success.analyze', { type: 'success' })
     } catch (error) {
-      notify(translate('ai.error.analyze') + ': ' + error.message, {
+      notify(translate('ai.error.analyze') + ': ' + aiErrorMessage(error, translate), {
         type: 'error',
       })
     } finally {
       setLoading(false)
     }
   }
+
+  const handleFetchLyrics = async () => {
+    if (!record || !record.id) return
+    setLyricsFetching(true)
+    try {
+      await httpClient('/api/ai/lyrics/fetch', {
+        method: 'POST',
+        body: JSON.stringify({ mediaFileId: record.id }),
+      })
+      // Seed the status so the polling effect kicks in.
+      setLyricsStatus({ status: 'queued', step: 'lyrics' })
+    } catch (error) {
+      notify(translate('ai.lyrics.error') + ': ' + error.message, {
+        type: 'error',
+      })
+    } finally {
+      setLyricsFetching(false)
+    }
+  }
+
+  // Fetch the existing status once when the Lyrics tab is opened for a record.
+  // (handled by the useEffect above on tabValue change)
+
 
   if (!record) return null
 
@@ -266,6 +367,7 @@ const AIDrawer = ({ open, onClose, record }) => {
         <Tab label={translate('ai.translate.title')} icon={<TranslateIcon />} />
         <Tab label={translate('ai.decode.title')} icon={<DecodeIcon />} />
         <Tab label={translate('ai.analyze.title')} icon={<AnalyzeIcon />} />
+        <Tab label={translate('ai.lyrics.title')} icon={<MdLyrics />} />
       </Tabs>
 
       <Box className={classes.content}>
@@ -366,6 +468,62 @@ const AIDrawer = ({ open, onClose, record }) => {
               </Typography>
             </Paper>
           )}
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={3}>
+          <Typography variant="body2" color="textSecondary" gutterBottom>
+            {translate('ai.lyrics.description')}
+          </Typography>
+
+          {lyricsStatus && lyricsStatus.status === 'done' && (
+            <Box className={classes.resultBox}>
+              <Typography variant="body2" color="primary">
+                ✓ {translate('ai.lyrics.done')}
+              </Typography>
+            </Box>
+          )}
+
+          {lyricsStatus && lyricsStatus.status === 'error' && (
+            <Box className={classes.resultBox}>
+              <Typography variant="body2" color="error">
+                ✗ {translate('ai.lyrics.error')}: {lyricsStatus.error}
+              </Typography>
+            </Box>
+          )}
+
+          {lyricsStatus &&
+            (lyricsStatus.status === 'queued' ||
+              lyricsStatus.status === 'running') && (
+              <Box className={classes.resultBox}>
+                <CircularProgress size={16} />
+                <Typography variant="body2" color="textSecondary">
+                  {lyricsStatus.step === 'translation'
+                    ? translate('ai.lyrics.statusTranslation')
+                    : translate('ai.lyrics.statusLyrics')}
+                  …
+                </Typography>
+              </Box>
+            )}
+
+          <Box className={classes.actionButtons}>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleFetchLyrics}
+              disabled={
+                lyricsFetching ||
+                (lyricsStatus &&
+                  (lyricsStatus.status === 'queued' ||
+                    lyricsStatus.status === 'running'))
+              }
+              startIcon={
+                lyricsFetching ? <CircularProgress size={16} /> : <MdLyrics />
+              }
+              fullWidth
+            >
+              {translate('ai.lyrics.action')}
+            </Button>
+          </Box>
         </TabPanel>
       </Box>
     </Drawer>

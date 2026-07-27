@@ -12,6 +12,7 @@ import {
   PLAYER_SYNC_QUEUE,
   PLAYER_SET_MODE,
   PLAYER_REFRESH_QUEUE,
+  PLAYER_SET_LYRIC_LANG,
 } from '../actions'
 import config from '../config'
 
@@ -21,6 +22,9 @@ const initialState = {
   clear: false,
   volume: config.defaultUIVolume / 100,
   savedPlayIndex: 0,
+  // Which language track to show in the player's lyric panel: 'original' (the
+  // main synced lyric) or a language code like 'ru' (a synced translation).
+  lyricLang: 'original',
 }
 
 const pad = (value) => {
@@ -40,7 +44,52 @@ const makeMusicSrc = (trackId) =>
           .catch(() => subsonic.streamUrl(trackId))
     : subsonic.streamUrl(trackId)
 
-const mapToAudioLists = (item) => {
+// Format a millisecond timestamp as [mm:ss.cc] (centiseconds), matching the
+// LRC format the external player's lyric parser expects.
+const formatLrcTime = (ms) => {
+  let time = Math.floor(ms / 10)
+  const cs = time % 100
+  time = Math.floor(time / 100)
+  const sec = time % 60
+  const min = Math.floor(time / 60) % 60
+  return `[${pad(min)}:${pad(sec)}.${pad(cs)}]`
+}
+
+// Build an LRC text string from the structured lyrics JSON stored in
+// media_file.lyrics, selecting the entry to show by language. `lang` is either
+// 'original' (the main-kind track) or a language code like 'ru' (a translation
+// track). Falls back to original if the requested language isn't present.
+const lyricsToLrc = (rawLyrics, lang) => {
+  if (!rawLyrics) return ''
+  let structured
+  try {
+    structured = JSON.parse(rawLyrics)
+  } catch {
+    return ''
+  }
+  if (!Array.isArray(structured) || structured.length === 0) return ''
+
+  let pick
+  if (lang === 'original' || lang == null) {
+    pick = structured.find((l) => !l.kind || l.kind === 'main') || structured[0]
+  } else {
+    // Prefer a translation track matching the requested language; if none,
+    // fall back to the main track so the panel is never empty.
+    pick =
+      structured.find((l) => l.lang === lang) ||
+      structured.find((l) => l.kind === 'translation' && l.lang === lang) ||
+      structured.find((l) => !l.kind || l.kind === 'main') ||
+      structured[0]
+  }
+  if (!pick || !pick.synced || !Array.isArray(pick.line)) return ''
+
+  return pick.line
+    .filter((l) => l.start != null)
+    .map((l) => `${formatLrcTime(l.start)} ${l.value}`)
+    .join('\n')
+}
+
+const mapToAudioLists = (item, lang = 'original') => {
   // If item comes from a playlist, trackId is mediaFileId
   const trackId = item.mediaFileId || item.id
 
@@ -56,34 +105,12 @@ const mapToAudioLists = (item) => {
     }
   }
 
-  const { lyrics } = item
-  let lyricText = ''
-
-  if (lyrics) {
-    const structured = JSON.parse(lyrics)
-    for (const structuredLyric of structured) {
-      if (structuredLyric.synced) {
-        for (const line of structuredLyric.line) {
-          let time = Math.floor(line.start / 10)
-          const ms = time % 100
-          time = Math.floor(time / 100)
-          const sec = time % 60
-          time = Math.floor(time / 60)
-          const min = time % 60
-
-          ms.toString()
-          lyricText += `[${pad(min)}:${pad(sec)}.${pad(ms)}] ${line.value}\n`
-        }
-      }
-    }
-  }
-
   return {
     trackId,
     uuid: uuidv4(),
     song: item,
     name: item.title,
-    lyric: lyricText,
+    lyric: lyricsToLrc(item.lyrics, lang),
     singer: item.artist,
     duration: item.duration,
     musicSrc: makeMusicSrc(trackId),
@@ -106,7 +133,7 @@ const reducePlayTracks = (state, { data, id }) => {
     if (key === id) {
       playIndex = idx
     }
-    return mapToAudioLists(data[key])
+    return mapToAudioLists(data[key], state.lyricLang)
   })
   return {
     ...state,
@@ -119,7 +146,7 @@ const reducePlayTracks = (state, { data, id }) => {
 const reduceSetTrack = (state, { data }) => {
   return {
     ...state,
-    queue: [mapToAudioLists(data)],
+    queue: [mapToAudioLists(data, state.lyricLang)],
     playIndex: 0,
     clear: true,
   }
@@ -128,13 +155,15 @@ const reduceSetTrack = (state, { data }) => {
 const reduceAddTracks = (state, { data }) => {
   const queue = state.queue
   Object.keys(data).forEach((id) => {
-    queue.push(mapToAudioLists(data[id]))
+    queue.push(mapToAudioLists(data[id], state.lyricLang))
   })
   return { ...state, queue, clear: false }
 }
 
 const reducePlayNext = (state, { data }) => {
-  const newTracks = Object.keys(data).map((id) => mapToAudioLists(data[id]))
+  const newTracks = Object.keys(data).map((id) =>
+    mapToAudioLists(data[id], state.lyricLang),
+  )
   const newQueue = []
   const current = state.current || {}
   let foundPos = false
@@ -229,6 +258,21 @@ export const playerReducer = (previousState = initialState, payload) => {
       return reduceCurrent(previousState, payload)
     case PLAYER_SET_MODE:
       return reduceMode(previousState, payload)
+    case PLAYER_SET_LYRIC_LANG: {
+      const lang = payload.lang || 'original'
+      // Rebuild the lyric text of every queued track for the new language
+      // WITHOUT setting `clear` — the external player reloads the current
+      // item's lyric from the updated audioLists without restarting playback.
+      return {
+        ...previousState,
+        lyricLang: lang,
+        queue: previousState.queue.map((item) =>
+          item.isRadio
+            ? item
+            : { ...item, lyric: lyricsToLrc(item.song?.lyrics, lang) },
+        ),
+      }
+    }
     case PLAYER_REFRESH_QUEUE: {
       const resolvedUrls = payload.data || {}
       return {

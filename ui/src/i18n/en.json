@@ -408,61 +408,86 @@
         "requiredHosts": "Required hosts"
       },
       "placeholders": {
-        "configKey": "key",
+      "configKey": "key",
         "configValue": "value"
       }
+    }
+  },
+  "ai": {
+    "config": {
+      "title": "AI Assistant Settings",
+      "description": "Configure your AI provider for lyrics translation and track analysis",
+      "provider": "AI Provider",
+      "apiKey": "API Key",
+      "apiKeyHelp": "Your API key for the selected provider (stored in the database)",
+      "apiKeyMasked": "Leave as is to keep the current key, or type a new one",
+      "apiEndpoint": "API Endpoint",
+      "apiEndpointHelp": "Custom API endpoint URL (optional)",
+      "model": "Model",
+      "modelHelp": "Model name to use (e.g., gemini-3.5-flash, gpt-4o-mini, llama3)",
+      "defaultLanguage": "Default Translation Language",
+      "saved": "AI settings saved successfully",
+      "error": "Failed to save AI settings",
+      "configured": "configured"
     },
-    "ai": {
-      "config": {
-        "title": "AI Assistant Settings",
-        "description": "Configure your AI provider for lyrics translation and track analysis",
-        "provider": "AI Provider",
-        "apiKey": "API Key",
-        "apiKeyHelp": "Your API key for the selected provider (stored in the database)",
-        "apiKeyMasked": "Leave as is to keep the current key, or type a new one",
-        "apiEndpoint": "API Endpoint",
-        "apiEndpointHelp": "Custom API endpoint URL (optional)",
-        "model": "Model",
-        "modelHelp": "Model name to use (e.g., gpt-4o-mini, llama3)",
-        "defaultLanguage": "Default Translation Language",
-        "saved": "AI settings saved successfully",
-        "error": "Failed to save AI settings",
-        "configured": "configured"
-      },
-      "translate": {
-        "title": "Translate Lyrics",
-        "targetLanguage": "Target Language",
-        "action": "Translate",
-        "noLyrics": "No lyrics available for this track",
-        "recallHint": "No embedded lyrics — the AI will try to recall the song from its title and artist.",
-        "description": "Translates the lyrics to your preferred language. If the track has no embedded lyrics, the AI recalls them from the song title and artist."
-      },
-      "decode": {
-        "title": "Decode Track",
-        "action": "Decode",
-        "description": "Analyze the meaning, mood, and context of this song"
-      },
-      "analyze": {
-        "title": "Analyze Track",
-        "action": "Analyze",
-        "description": "Get AI-powered insights about genre, style, and composition"
-      },
-      "actions": {
-        "aiAssistant": "AI Assistant"
-      },
-      "warning": {
-        "noLyrics": "This track has no lyrics to translate"
-      },
-      "success": {
-        "translate": "Translation completed",
-        "decode": "Track analysis completed",
-        "analyze": "Track analysis completed"
-      },
-      "error": {
-        "translate": "Translation failed",
-        "decode": "Track analysis failed",
-        "analyze": "Analysis failed"
-      }
+    "translate": {
+      "title": "Translate Lyrics",
+      "targetLanguage": "Target Language",
+      "action": "Translate",
+      "noLyrics": "No lyrics available for this track",
+      "recallHint": "No embedded lyrics — the AI will try to recall the song from its title and artist.",
+      "description": "Translates the lyrics to your preferred language. If the track has no embedded lyrics, the AI recalls them from the song title and artist."
+    },
+    "decode": {
+      "title": "Decode Track",
+      "action": "Decode",
+      "description": "Analyze the meaning, mood, and context of this song"
+    },
+    "analyze": {
+      "title": "Analyze Track",
+      "action": "Analyze",
+      "description": "Get AI-powered insights about genre, style, and composition"
+    },
+    "lyrics": {
+      "title": "Fetch Lyrics",
+      "action": "Fetch in background",
+      "description": "Search the web for the original lyrics and a synced Russian translation, save them as sidecar .lrc files next to the track.",
+      "running": "Working…",
+      "queued": "Queued…",
+      "done": "Lyrics saved",
+      "error": "Failed",
+      "statusQueued": "Queued",
+      "statusRunning": "Running",
+      "statusLyrics": "Searching for lyrics",
+      "statusTranslation": "Translating to Russian",
+      "statusDecode": "Decoding meaning",
+      "statusDone": "Done",
+      "statusError": "Error",
+      "noFile": "No lyrics file found for this track. Fetch them in the background using web search.",
+      "refetch": "Re-fetch"
+    },
+    "test": {
+      "action": "Test connection",
+      "success": "Connection successful",
+      "failed": "Connection failed",
+      "unknownError": "unknown error"
+    },
+    "actions": {
+      "aiAssistant": "AI Assistant"
+    },
+    "warning": {
+      "noLyrics": "This track has no lyrics to translate"
+    },
+    "success": {
+      "translate": "Translation completed",
+      "decode": "Track analysis completed",
+      "analyze": "Analysis completed"
+    },
+    "error": {
+      "translate": "Translation failed",
+      "decode": "Track analysis failed",
+      "analyze": "Analysis failed",
+      "quota": "Gemini quota or rate limit reached (free tier). Wait a minute and try again, or enable billing on your Google AI project."
     }
   },
   "ra": {

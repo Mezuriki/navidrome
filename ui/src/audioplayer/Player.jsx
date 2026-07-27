@@ -213,6 +213,9 @@ const Player = () => {
       clearPriorAudioLists: false,
       showDestroy: true,
       showDownload: false,
+      // Show the external player's lyric panel (synced, current-line highlight).
+      // Which language is displayed is controlled by the lyric language switch
+      // in PlayerToolbar (original vs Russian translation).
       showLyric: true,
       showReload: false,
       toggleMode: !isDesktop,
