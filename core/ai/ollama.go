@@ -114,23 +114,8 @@ func (p *OllamaProvider) Analyze(ctx context.Context, req *AnalyzeRequest) (*Ana
 
 // Decode analyzes the meaning of a song using Ollama (plain-text response)
 func (p *OllamaProvider) Decode(ctx context.Context, req *DecodeRequest) (*DecodeResponse, error) {
-	systemPrompt := "You are a thoughtful music analyst who explains what songs mean. " +
-		"Interpret the song: its meaning and message, mood, main themes, and a short commentary. " +
-		"Plain text, short paragraphs. If you don't know the song, base it on the title/artist and say so. " +
-		"Do not output JSON or empty responses."
-
-	var b strings.Builder
-	fmt.Fprintf(&b, "Song: %s\nArtist: %s\n", req.Title, req.Artist)
-	if req.Album != "" {
-		fmt.Fprintf(&b, "Album: %s\n", req.Album)
-	}
-	if strings.TrimSpace(req.Lyrics) != "" {
-		fmt.Fprintf(&b, "\nLyrics:\n%s\n", req.Lyrics)
-	} else {
-		b.WriteString("\nNo lyrics provided — interpret based on the title and artist.\n")
-	}
-
-	resp, err := p.callGenerate(ctx, systemPrompt, b.String(), req.Model)
+	systemPrompt, userPrompt := decodePrompts(req)
+	resp, err := p.callGenerate(ctx, systemPrompt, userPrompt, req.Model)
 	if err != nil {
 		return nil, err
 	}
@@ -218,4 +203,40 @@ func (p *OllamaProvider) getModel(model string) string {
 		return p.model
 	}
 	return model
+}
+
+// TestConnection verifies the Ollama server is reachable by hitting its
+// /api/tags endpoint.
+func (p *OllamaProvider) TestConnection(ctx context.Context) error {
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", p.endpoint+"/tags", nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Ollama returned status %d: %s", resp.StatusCode, truncateString(string(body), 300))
+	}
+	return nil
+}
+
+// RecallLyrics recovers the lyrics for a song and returns them as LRC text with
+// approximate timestamps. Quality depends entirely on the loaded model.
+func (p *OllamaProvider) RecallLyrics(ctx context.Context, req *RecallRequest) (*RecallResponse, error) {
+	systemPrompt, userPrompt := recallPrompts(req)
+	resp, err := p.callGenerate(ctx, systemPrompt, userPrompt, req.Model)
+	if err != nil {
+		return nil, err
+	}
+	body := stripThinking(resp)
+	if strings.Contains(body, "could not find the lyrics") {
+		body = ""
+	}
+	return &RecallResponse{LRC: body, Model: p.getModel(req.Model)}, nil
 }

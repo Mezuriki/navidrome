@@ -129,26 +129,10 @@ func (p *OpenAIProvider) Analyze(ctx context.Context, req *AnalyzeRequest) (*Ana
 
 // Decode returns a free-form interpretation of the song's meaning (plain text).
 func (p *OpenAIProvider) Decode(ctx context.Context, req *DecodeRequest) (*DecodeResponse, error) {
-	systemPrompt := "You are a thoughtful music analyst who explains what songs mean. " +
-		"Interpret the song: its overall meaning and message, the mood, the main themes, and a short " +
-		"commentary on what it might be about. Write in plain text using short paragraphs. " +
-		"If you don't know the song well, base your interpretation on the title and artist, and say so. " +
-		"Do not output JSON or empty responses."
-
-	var b strings.Builder
-	fmt.Fprintf(&b, "Song: %s\nArtist: %s\n", req.Title, req.Artist)
-	if req.Album != "" {
-		fmt.Fprintf(&b, "Album: %s\n", req.Album)
-	}
-	if strings.TrimSpace(req.Lyrics) != "" {
-		fmt.Fprintf(&b, "\nLyrics:\n%s\n", req.Lyrics)
-	} else {
-		b.WriteString("\nNo lyrics provided — interpret based on the title and artist.\n")
-	}
-
+	systemPrompt, userPrompt := decodePrompts(req)
 	messages := []Message{
 		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: b.String()},
+		{Role: "user", Content: userPrompt},
 	}
 
 	resp, err := p.callChat(ctx, messages, req.Model)
@@ -269,4 +253,51 @@ func (p *OpenAIProvider) getModel(model string) string {
 		return p.model
 	}
 	return model
+}
+
+// TestConnection verifies the provider is reachable and the API key is valid
+// by listing models from the /models endpoint. Local OpenAI-compatible servers
+// (Ollama, LocalAI) usually implement this endpoint too; if they don't, the
+// request will fail with a clear error.
+func (p *OpenAIProvider) TestConnection(ctx context.Context) error {
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", p.endpoint+"/models", nil)
+	if err != nil {
+		return err
+	}
+	if p.apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	}
+
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, truncateString(string(body), 300))
+	}
+	return nil
+}
+
+// RecallLyrics recovers the lyrics for a song and returns them as LRC text with
+// approximate timestamps. Local OpenAI-compatible models may not know many
+// songs; this is primarily useful when the provider is pointed at a capable
+// hosted model.
+func (p *OpenAIProvider) RecallLyrics(ctx context.Context, req *RecallRequest) (*RecallResponse, error) {
+	systemPrompt, userPrompt := recallPrompts(req)
+	messages := []Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
+	}
+	resp, err := p.callChat(ctx, messages, req.Model)
+	if err != nil {
+		return nil, err
+	}
+	body := stripThinking(resp)
+	if strings.Contains(body, "could not find the lyrics") {
+		body = ""
+	}
+	return &RecallResponse{LRC: body, Model: p.getModel(req.Model)}, nil
 }
