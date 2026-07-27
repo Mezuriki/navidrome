@@ -169,6 +169,11 @@ func (r *mediaFileRepository) UpdateProbeData(id string, data string) error {
 	return err
 }
 
+func (r *mediaFileRepository) UpdateLyrics(id string, lyrics string) error {
+	_, err := r.executeSQL(Update(r.tableName).Set("lyrics", lyrics).Where(Eq{"id": id}))
+	return err
+}
+
 func (r *mediaFileRepository) selectMediaFile(options ...model.QueryOptions) SelectBuilder {
 	sql := r.newSelect(options...).Columns("media_file.*", "library.path as library_path", "library.name as library_name").
 		LeftJoin("library on media_file.library_id = library.id")

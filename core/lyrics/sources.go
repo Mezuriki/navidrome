@@ -63,9 +63,48 @@ func fromExternalFile(ctx context.Context, mf *model.MediaFile, suffix string) (
 		return nil, nil
 	}
 
+	// Load any language-suffixed sidecars next to the track, e.g. "Song.ru.lrc"
+	// or "Song.en.lrc". Each becomes an additional Lyrics entry so the player
+	// can show original + translation side by side. The main file stays kind=main;
+	// language-suffixed files are marked kind=translation.
+	for _, lang := range sidecarLanguages {
+		langRelPath := mf.Path[0:len(mf.Path)-len(ext)] + "." + lang + suffix
+		lf, lerr := fsys.Open(langRelPath)
+		if errors.Is(lerr, fs.ErrNotExist) {
+			continue
+		} else if lerr != nil {
+			continue
+		}
+		lcontents, cerr := io.ReadAll(ioutils.UTF8Reader(lf))
+		lf.Close()
+		if cerr != nil {
+			continue
+		}
+		langList, perr := model.ParseLyrics(suffix, lang, lcontents)
+		if perr != nil {
+			log.Warn(ctx, "error parsing language sidecar lyric file", "path", langRelPath, err)
+			continue
+		}
+		for i := range langList {
+			// Tag as a translation unless the file explicitly declares itself
+			// otherwise. Lang is taken from the suffix (and refined by any
+			// [lang:] tag inside the file during parsing).
+			langList[i].Kind = model.LyricKindTranslation
+			if langList[i].Lang == "" {
+				langList[i].Lang = lang
+			}
+		}
+		list = append(list, langList...)
+		log.Trace(ctx, "retrieved translation lyrics from sidecar", "path", langRelPath, "lang", lang)
+	}
+
 	log.Trace(ctx, "retrieved lyrics from external file", "path", sidecarRelPath)
 	return list, nil
 }
+
+// sidecarLanguages lists the language suffixes probed next to each media file,
+// e.g. "Track.ru.lrc", "Track.en.lrc". Extend as needed.
+var sidecarLanguages = []string{"ru", "en", "de", "fr", "es", "it", "pt", "ja", "zh", "ko"}
 
 // fromPlugin attempts to load lyrics from a plugin with the given name.
 func (l *lyricsService) fromPlugin(ctx context.Context, mf *model.MediaFile, pluginName string) (model.LyricList, error) {

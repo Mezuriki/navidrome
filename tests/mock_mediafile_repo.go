@@ -131,6 +131,17 @@ func (m *MockMediaFileRepo) UpdateProbeData(id string, data string) error {
 	return model.ErrNotFound
 }
 
+func (m *MockMediaFileRepo) UpdateLyrics(id string, lyrics string) error {
+	if m.Err {
+		return errors.New("error")
+	}
+	if d, ok := m.Data[id]; ok {
+		d.Lyrics = lyrics
+		return nil
+	}
+	return model.ErrNotFound
+}
+
 func (m *MockMediaFileRepo) Delete(id string) error {
 	if m.Err {
 		return errors.New("error")

@@ -279,8 +279,34 @@ func (api *Router) addAIRoute(r chi.Router) {
 			api.aiHandler.UpdateConfig(w, r)
 		})
 		r.Get("/status", func(w http.ResponseWriter, r *http.Request) {
-			api.aiHandler.Status(w, r)
-		})
+				api.aiHandler.Status(w, r)
+			})
+			r.Post("/test", func(w http.ResponseWriter, r *http.Request) {
+				api.aiHandler.Test(w, r)
+			})
+			r.Get("/translate", func(w http.ResponseWriter, r *http.Request) {
+				api.aiHandler.GetStoredTranslate(w, r)
+			})
+			r.Get("/decode", func(w http.ResponseWriter, r *http.Request) {
+				api.aiHandler.GetStoredDecode(w, r)
+			})
+			r.Get("/analyze", func(w http.ResponseWriter, r *http.Request) {
+				api.aiHandler.GetStoredAnalyze(w, r)
+			})
+			r.Get("/decode/missing", func(w http.ResponseWriter, r *http.Request) {
+				api.aiHandler.MissingDecode(w, r)
+			})
+			r.Route("/lyrics", func(r chi.Router) {
+				r.Post("/fetch", func(w http.ResponseWriter, r *http.Request) {
+					api.aiHandler.FetchLyrics(w, r)
+				})
+				r.Get("/status", func(w http.ResponseWriter, r *http.Request) {
+					api.aiHandler.LyricsStatus(w, r)
+				})
+				r.Get("/missing", func(w http.ResponseWriter, r *http.Request) {
+					api.aiHandler.MissingLyrics(w, r)
+				})
+			})
 	})
 }
 

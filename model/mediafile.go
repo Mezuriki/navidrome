@@ -436,6 +436,10 @@ type MediaFileRepository interface {
 	Exists(id string) (bool, error)
 	Put(m *MediaFile) error
 	UpdateProbeData(id string, data string) error
+	// UpdateLyrics stores the given JSON LyricList in the media_file.lyrics column.
+	// Used by the AI lyrics pipeline to make generated lyrics visible to the web
+	// player (which reads this column, not the sidecar files).
+	UpdateLyrics(id string, lyrics string) error
 	Get(id string) (*MediaFile, error)
 	GetWithParticipants(id string) (*MediaFile, error)
 	GetAll(options ...QueryOptions) (MediaFiles, error)
