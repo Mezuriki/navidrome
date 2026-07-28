@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import { useSelector, useDispatch } from 'react-redux'
-import AIDrawer from '../dialogs/AIDrawer'
+import AIWindow from '../dialogs/AIWindow'
 import { closeAIDrawer } from '../actions'
 
 const AIDrawerContainer = () => {
@@ -12,7 +12,7 @@ const AIDrawerContainer = () => {
     dispatch(closeAIDrawer())
   }
 
-  return <AIDrawer open={open} onClose={handleClose} record={record} />
+  return <AIWindow open={open} onClose={handleClose} record={record} />
 }
 
 AIDrawerContainer.propTypes = {}

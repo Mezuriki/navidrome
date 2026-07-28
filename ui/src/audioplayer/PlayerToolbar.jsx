@@ -1,18 +1,15 @@
 import React, { useCallback } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
+import { useDispatch } from 'react-redux'
 import { useGetOne } from 'react-admin'
 import { GlobalHotKeys } from 'react-hotkeys'
 import IconButton from '@material-ui/core/IconButton'
-import Select from '@material-ui/core/Select'
-import MenuItem from '@material-ui/core/MenuItem'
 import { useMediaQuery } from '@material-ui/core'
 import { RiSaveLine } from 'react-icons/ri'
-import { MdPsychology, MdTranslate } from 'react-icons/md'
+import { MdPsychology } from 'react-icons/md'
 import { LoveButton, useToggleLove } from '../common'
 import {
   openSaveQueueDialog,
   openAIDrawer,
-  setLyricLang,
 } from '../actions'
 import { keyMap } from '../hotkeys'
 import { makeStyles } from '@material-ui/core/styles'
@@ -60,53 +57,14 @@ const useStyles = makeStyles((theme) => ({
     display: 'flex',
     alignItems: 'center',
   },
-  langSelect: {
-    minWidth: '2rem',
-    fontSize: '0.8rem',
-    '&:before': { display: 'none' },
-    '& .MuiSelect-select': { paddingRight: '18px !important', paddingTop: 0, paddingBottom: 0 },
-  },
 }))
 
 const PlayerToolbar = ({ id, isRadio }) => {
   const dispatch = useDispatch()
-  const lyricLang = useSelector((state) => state.player?.lyricLang || 'original')
   const { data, loading } = useGetOne('song', id, { enabled: !!id && !isRadio })
   const [toggleLove, toggling] = useToggleLove('song', data)
   const isDesktop = useMediaQuery('(min-width:810px)')
   const classes = useStyles()
-
-  // Discover which lyric languages are available for the current track by
-  // parsing item.lyrics. Always offers 'original'; adds an entry per synced
-  // translation track (e.g. 'ru').
-  const lyricLanguageOptions = React.useMemo(() => {
-    const opts = [{ value: 'original', label: 'Original' }]
-    if (data?.lyrics) {
-      try {
-        const structured = JSON.parse(data.lyrics)
-        if (Array.isArray(structured)) {
-          structured
-            .filter((l) => l && l.synced && l.kind === 'translation' && l.lang)
-            .forEach((l) => {
-              if (!opts.find((o) => o.value === l.lang)) {
-                opts.push({ value: l.lang, label: l.lang.toUpperCase() })
-              }
-            })
-        }
-      } catch {
-        // ignore parse errors — keep just 'original'
-      }
-    }
-    return opts
-  }, [data])
-
-  const handleLangChange = useCallback(
-    (e) => {
-      dispatch(setLyricLang(e.target.value))
-      e.stopPropagation()
-    },
-    [dispatch],
-  )
 
   const handlers = {
     TOGGLE_LOVE: useCallback(() => toggleLove(), [toggleLove]),
@@ -171,31 +129,6 @@ const PlayerToolbar = ({ id, isRadio }) => {
     </IconButton>
   )
 
-  // Lyric language switch. Hidden when there is no translation available, so it
-  // only appears for tracks that actually have a synced translation sidecar.
-  const showLangSelect =
-    !isRadio && lyricLanguageOptions.length > 1 && data?.lyrics
-  const langSelect = showLangSelect ? (
-    <Select
-      value={lyricLang}
-      onChange={handleLangChange}
-      disableUnderline
-      title="Lyric language"
-      className={classes.langSelect}
-      IconComponent={(props) => <MdTranslate {...props} />}
-      renderValue={(value) =>
-        (lyricLanguageOptions.find((o) => o.value === value) || {}).label ||
-        value
-      }
-    >
-      {lyricLanguageOptions.map((o) => (
-        <MenuItem key={o.value} value={o.value}>
-          {o.label}
-        </MenuItem>
-      ))}
-    </Select>
-  ) : null
-
   return (
     <>
       <GlobalHotKeys keyMap={keyMap} handlers={handlers} allowChanges />
@@ -203,14 +136,12 @@ const PlayerToolbar = ({ id, isRadio }) => {
         <li className={`${listItemClass} item`}>
           {saveQueueButton}
           {aiButton}
-          {langSelect}
           {loveButton}
         </li>
       ) : (
         <>
           <li className={`${listItemClass} item`}>{saveQueueButton}</li>
           <li className={`${listItemClass} item`}>{aiButton}</li>
-          {langSelect && <li className={`${listItemClass} item`}>{langSelect}</li>}
           <li className={`${listItemClass} item`}>{loveButton}</li>
         </>
       )}

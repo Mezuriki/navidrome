@@ -12,6 +12,7 @@ import {
 import ReactGA from 'react-ga'
 import { GlobalHotKeys } from 'react-hotkeys'
 import ReactJkMusicPlayer from 'navidrome-music-player'
+import { setAudioInstance } from './audioInstanceRegistry'
 import 'navidrome-music-player/assets/index.css'
 import useCurrentTheme from '../themes/useCurrentTheme'
 import config from '../config'
@@ -454,6 +455,15 @@ const Player = () => {
       if (timer) clearTimeout(timer)
       audioInstance.removeEventListener('seeked', handleSeeked)
     }
+  }, [audioInstance])
+
+  // Publish the audio element to the process-wide registry so that components
+  // outside the player tree (e.g. the AI Assistant floating window, which needs
+  // the live playback position for synced-lyric line highlighting) can attach
+  // their own listeners without going through Redux.
+  useEffect(() => {
+    setAudioInstance(audioInstance)
+    return () => setAudioInstance(null)
   }, [audioInstance])
 
   return (

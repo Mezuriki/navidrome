@@ -488,6 +488,18 @@
       "decode": "Track analysis failed",
       "analyze": "Analysis failed",
       "quota": "Gemini quota or rate limit reached (free tier). Wait a minute and try again, or enable billing on your Google AI project."
+    },
+    "window": {
+      "title": "AI ассистент",
+      "lyricsTab": "Лирика",
+      "meaningTab": "Смысл",
+      "original": "Оригинал",
+      "russian": "RU",
+      "noLyrics": "Для этого трека лирика пока не получена.",
+      "noRu": "Русский перевод пока недоступен.",
+      "noMeaning": "Для этого трека смысловой разбор пока не сделан.",
+      "generateLyrics": "Сгенерировать лирику",
+      "generateMeaning": "Сгенерировать смысл"
     }
   },
   "ra": {
