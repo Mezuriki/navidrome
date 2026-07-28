@@ -98,14 +98,16 @@ const useStyles = makeStyles((theme) => ({
     flex: 1,
     overflowY: 'auto',
     padding: theme.spacing(2),
-    // Keep room for the vertical language switch pinned to the right edge.
-    paddingRight: theme.spacing(6),
+    // Keep room for the vertical language switch pinned inside the panel,
+    // clear of the scrollbar (which sits at the far right edge).
+    paddingRight: theme.spacing(7),
   },
-  // Minimalist vertical language switch pinned to the right edge of the panel.
+  // Minimalist vertical language switch pinned inside the panel, to the LEFT of
+  // the scrollbar so it never overlaps it.
   langRail: {
     position: 'absolute',
     top: '50%',
-    right: theme.spacing(0.5),
+    right: theme.spacing(3.5),
     transform: 'translateY(-50%)',
     display: 'flex',
     flexDirection: 'column',
@@ -361,27 +363,27 @@ const LyricsTab = ({ record }) => {
             {translate('ai.window.noRu')}
           </Typography>
         )}
+        {ruAvailable && (
+          <div className={classes.langRail}>
+            <button
+              type="button"
+              title={translate('ai.window.original')}
+              className={`${classes.langBtn} ${lyricLang === 'original' ? classes.langBtnActive : ''}`}
+              onClick={() => dispatch(setLyricLang('original'))}
+            >
+              О
+            </button>
+            <button
+              type="button"
+              title={translate('ai.window.russian')}
+              className={`${classes.langBtn} ${lyricLang === 'ru' ? classes.langBtnActive : ''}`}
+              onClick={() => dispatch(setLyricLang('ru'))}
+            >
+              RU
+            </button>
+          </div>
+        )}
       </div>
-      {ruAvailable && (
-        <div className={classes.langRail}>
-          <button
-            type="button"
-            title={translate('ai.window.original')}
-            className={`${classes.langBtn} ${lyricLang === 'original' ? classes.langBtnActive : ''}`}
-            onClick={() => dispatch(setLyricLang('original'))}
-          >
-            О
-          </button>
-          <button
-            type="button"
-            title={translate('ai.window.russian')}
-            className={`${classes.langBtn} ${lyricLang === 'ru' ? classes.langBtnActive : ''}`}
-            onClick={() => dispatch(setLyricLang('ru'))}
-          >
-            RU
-          </button>
-        </div>
-      )}
     </div>
   )
 }
@@ -525,6 +527,46 @@ const AIWindow = ({ open, onClose, record }) => {
     if (open) setTab(0)
   }, [open, record?.id])
 
+  // Keep the window fully inside the viewport whenever the browser window is
+  // resized or zoomed, so it never ends up off-screen (the user reported the
+  // window disappearing from view). Re-clamp the stored position/size.
+  useEffect(() => {
+    if (!open) return
+    const onResize = () => {
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      setSize((s) => ({
+        width: Math.min(s.width, Math.max(MIN_W, vw - 16)),
+        height: Math.min(s.height, Math.max(MIN_H, vh - PLAYER_BAR_RESERVE - 8)),
+      }))
+      setPos((p) => {
+        const w = Math.min(size.width, vw - 16)
+        const h = Math.min(size.height, vh - PLAYER_BAR_RESERVE - 8)
+        return {
+          x: Math.max(0, Math.min(p.x, Math.max(0, vw - w - 8))),
+          y: Math.max(0, Math.min(p.y, Math.max(0, vh - h - PLAYER_BAR_RESERVE))),
+        }
+      })
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [open, size.width, size.height])
+
+  // Clamp the dropped position so the window stays fully on-screen (never let
+  // the header be dragged off the top, and never let the bottom slide under /
+  // past the player bar). This is what makes the window "always visible".
+  const handleDragStop = (_, d) => {
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const maxX = Math.max(0, vw - size.width - 8)
+    // Keep the whole window above the player bar and the header grabbable.
+    const maxY = Math.max(0, vh - size.height - PLAYER_BAR_RESERVE)
+    setPos({
+      x: Math.max(0, Math.min(d.x, maxX)),
+      y: Math.max(0, Math.min(d.y, maxY)),
+    })
+  }
+
   if (!open || !record) return null
 
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800
@@ -535,16 +577,23 @@ const AIWindow = ({ open, onClose, record }) => {
       className={classes.rnd}
       size={{ width: size.width, height: size.height }}
       position={{ x: pos.x, y: pos.y }}
-      onDragStop={(_, d) => setPos({ x: d.x, y: d.y })}
-      onResizeStop={(_, __, ref, ___, delta) => {
-        setSize({ width: ref.offsetWidth, height: ref.offsetHeight })
+      onDragStop={handleDragStop}
+      onResizeStop={(_, __, ref) => {
+        const newW = ref.offsetWidth
+        const newH = ref.offsetHeight
+        setSize({ width: newW, height: newH })
+        // If enlarging pushed the window off the right/bottom edge, pull it back in.
+        setPos((p) => ({
+          x: Math.min(p.x, Math.max(0, vw - newW - 8)),
+          y: Math.min(p.y, Math.max(0, vh - newH - PLAYER_BAR_RESERVE)),
+        }))
       }}
       bounds="window"
       dragHandleClassName="ai-window-header"
       minWidth={MIN_W}
       minHeight={MIN_H}
       maxWidth={vw - 16}
-      maxHeight={vh - 16}
+      maxHeight={vh - PLAYER_BAR_RESERVE - 8}
       enableResizing={{ bottomRight: true, right: true, bottom: true }}
     >
       <Paper className={classes.root} elevation={8}>
