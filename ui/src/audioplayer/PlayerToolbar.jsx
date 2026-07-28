@@ -78,13 +78,13 @@ const PlayerToolbar = ({ id, isRadio }) => {
     [dispatch],
   )
 
-  // Open the AI Assistant drawer (lyrics / translation / meaning) for the
-  // currently playing track. The drawer is mounted globally in Layout and
-  // driven by Redux state (state.aiDrawer).
+  // Open the AI Assistant window for the currently playing track. followPlayer
+  // makes the window track the live "now playing" track: switching songs in the
+  // player refreshes the window's data without reopening it.
   const handleOpenAI = useCallback(
     (e) => {
       if (data) {
-        dispatch(openAIDrawer(data))
+        dispatch(openAIDrawer(data, true))
       }
       e.stopPropagation()
     },

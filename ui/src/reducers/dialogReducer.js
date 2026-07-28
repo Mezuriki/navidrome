@@ -178,6 +178,7 @@ export const aiDrawerReducer = (
   previousState = {
     open: false,
     record: undefined,
+    followPlayer: false,
   },
   payload,
 ) => {
@@ -188,12 +189,16 @@ export const aiDrawerReducer = (
         ...previousState,
         open: true,
         record: payload.record,
+        // When opened from the player toolbar, the window should track the
+        // currently-playing track and refresh its data on every track change.
+        followPlayer: !!payload.followPlayer,
       }
     case AI_DRAWER_CLOSE:
       return {
         ...previousState,
         open: false,
         record: undefined,
+        followPlayer: false,
       }
     default:
       return previousState

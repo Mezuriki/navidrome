@@ -89,9 +89,10 @@ export const closeSaveQueueDialog = () => ({
   type: SAVE_QUEUE_CLOSE,
 })
 
-export const openAIDrawer = (record) => ({
+export const openAIDrawer = (record, followPlayer = false) => ({
   type: AI_DRAWER_OPEN,
   record,
+  followPlayer,
 })
 
 export const closeAIDrawer = () => ({

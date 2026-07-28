@@ -3,34 +3,37 @@ import PropTypes from 'prop-types'
 import { useDispatch, useSelector } from 'react-redux'
 import { Paper, Box, Tabs, Tab, Typography, IconButton, Chip, Button, CircularProgress } from '@material-ui/core'
 import { MdClose as CloseIcon, MdHelpOutline as MeaningIcon, MdLyrics, MdAutorenew } from 'react-icons/md'
-import Draggable from 'react-draggable'
+import { Rnd } from 'react-rnd'
 import { makeStyles } from '@material-ui/core/styles'
 import { useTranslate, useNotify, useGetOne } from 'react-admin'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { httpClient } from '../dataProvider'
-import { getAudioInstance } from '../audioplayer/audioInstanceRegistry'
 import { setLyricLang } from '../actions'
 
-const WINDOW_WIDTH = 480
+// Height reserved at the bottom for the external music-player panel so the
+// window never slides under it and the Lyrics/Meaning tabs stay fully visible.
+const PLAYER_BAR_RESERVE = 96
+const MIN_W = 340
+const MIN_H = 320
 
 const useStyles = makeStyles((theme) => ({
+  rnd: {
+    // The Rnd wrapper itself is positioned by the library; we only need a high
+    // z-index so the window floats above all app chrome (sidebars, the player
+    // bar at z-index 99) WITHOUT a backdrop — the background stays interactive.
+    zIndex: theme.zIndex.modal + 50,
+  },
   root: {
-    position: 'fixed',
-    // react-draggable applies the position as a CSS `transform: translate(x,y)`,
-    // so the element must be anchored at the viewport origin for the translate
-    // to map to actual screen coordinates. Without these explicit zeros the
-    // fixed element inherits a document-flow offset (e.g. after the page
-    // content) and the window renders far below the fold / off-screen.
-    top: 0,
-    left: 0,
-    zIndex: theme.zIndex.modal + 1,
-    width: WINDOW_WIDTH,
-    maxWidth: '92vw',
-    maxHeight: '85vh',
+    position: 'relative',
+    width: '100%',
+    height: '100%',
     display: 'flex',
     flexDirection: 'column',
     boxShadow: theme.shadows[8],
+    backgroundColor: theme.palette.background.paper,
+    overflow: 'hidden',
+    borderRadius: theme.shape.borderRadius,
   },
   header: {
     display: 'flex',
@@ -41,6 +44,7 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.palette.primary.main,
     color: theme.palette.primary.contrastText,
     userSelect: 'none',
+    flexShrink: 0,
   },
   headerTitle: {
     display: 'flex',
@@ -52,6 +56,7 @@ const useStyles = makeStyles((theme) => ({
   metadata: {
     padding: theme.spacing(1.5, 2),
     borderBottom: `1px solid ${theme.palette.divider}`,
+    flexShrink: 0,
   },
   titleLine: {
     fontWeight: 600,
@@ -74,53 +79,55 @@ const useStyles = makeStyles((theme) => ({
     gap: theme.spacing(0.5),
     marginTop: theme.spacing(1),
   },
-  tag: {
-    fontSize: '0.72rem',
-    height: 22,
-  },
+  tag: { fontSize: '0.72rem', height: 22 },
   body: {
     flex: 1,
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
-    minHeight: 320,
+    minHeight: 0, // allow flex child to shrink so the panel scrolls, not the window
   },
-  tabs: {
-    minHeight: 40,
-  },
-  tab: {
-    minHeight: 40,
-    textTransform: 'none',
-    fontSize: '0.9rem',
-  },
+  tabs: { minHeight: 40, flexShrink: 0 },
+  tab: { minHeight: 40, textTransform: 'none', fontSize: '0.9rem' },
   panelScroll: {
     flex: 1,
     overflowY: 'auto',
     padding: theme.spacing(2),
+    // Keep room for the vertical language switch pinned to the right edge.
+    paddingRight: theme.spacing(6),
   },
-  // --- Lyrics tab ---
-  lyricsLangSwitch: {
+  // Minimalist vertical language switch pinned to the right edge of the panel.
+  langRail: {
+    position: 'absolute',
+    top: '50%',
+    right: theme.spacing(0.5),
+    transform: 'translateY(-50%)',
     display: 'flex',
-    justifyContent: 'center',
-    marginBottom: theme.spacing(1.5),
+    flexDirection: 'column',
     gap: theme.spacing(0.5),
+    zIndex: 2,
   },
   langBtn: {
-    padding: theme.spacing(0.5, 1.5),
-    fontSize: '0.8rem',
+    width: 26,
+    height: 26,
+    minWidth: 0,
+    padding: 0,
     borderRadius: 999,
     border: `1px solid ${theme.palette.divider}`,
-    background: 'transparent',
+    background: theme.palette.background.paper,
     color: theme.palette.text.secondary,
+    fontSize: '0.66rem',
+    fontWeight: 600,
     cursor: 'pointer',
+    lineHeight: 1,
     '&:hover': { backgroundColor: theme.palette.action.hover },
   },
   langBtnActive: {
     backgroundColor: theme.palette.primary.main,
     color: theme.palette.primary.contrastText,
     borderColor: theme.palette.primary.main,
-    '&:hover': { backgroundColor: theme.palette.primary.dark },
   },
+  // --- Lyrics tab ---
   lyricLine: {
     padding: theme.spacing(0.6, 1),
     margin: theme.spacing(0.2, 0),
@@ -135,7 +142,6 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.palette.action.selected,
     color: theme.palette.text.primary,
     fontWeight: 600,
-    transform: 'scale(1.02)',
   },
   lyricEmpty: {
     textAlign: 'center',
@@ -144,11 +150,7 @@ const useStyles = makeStyles((theme) => ({
   },
   // --- Meaning tab ---
   markdown: {
-    '& h1, & h2, & h3, & h4': {
-      marginTop: theme.spacing(2),
-      marginBottom: theme.spacing(1),
-      lineHeight: 1.3,
-    },
+    '& h1, & h2, & h3, & h4': { marginTop: theme.spacing(2), marginBottom: theme.spacing(1), lineHeight: 1.3 },
     '& h1': { fontSize: '1.3rem' },
     '& h2': { fontSize: '1.15rem' },
     '& h3': { fontSize: '1.05rem' },
@@ -161,25 +163,13 @@ const useStyles = makeStyles((theme) => ({
       margin: theme.spacing(1, 0),
       color: theme.palette.text.secondary,
     },
-    '& code': {
-      backgroundColor: theme.palette.action.hover,
-      padding: '2px 5px',
-      borderRadius: 4,
-      fontSize: '0.85em',
-    },
-    '& pre': {
-      backgroundColor: theme.palette.action.hover,
-      padding: theme.spacing(1),
-      borderRadius: theme.shape.borderRadius,
-      overflowX: 'auto',
-    },
+    '& code': { backgroundColor: theme.palette.action.hover, padding: '2px 5px', borderRadius: 4, fontSize: '0.85em' },
+    '& pre': { backgroundColor: theme.palette.action.hover, padding: theme.spacing(1), borderRadius: theme.shape.borderRadius, overflowX: 'auto' },
     '& strong': { fontWeight: 600 },
     '& em': { fontStyle: 'italic' },
     '& hr': { border: 'none', borderTop: `1px solid ${theme.palette.divider}`, margin: theme.spacing(2, 0) },
   },
-  generateBtn: {
-    marginTop: theme.spacing(1.5),
-  },
+  generateBtn: { marginTop: theme.spacing(1.5) },
   statusBox: {
     display: 'flex',
     alignItems: 'center',
@@ -187,6 +177,17 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'center',
     padding: theme.spacing(3, 2),
     color: theme.palette.text.secondary,
+  },
+  resizeHandle: {
+    position: 'absolute',
+    right: 2,
+    bottom: 2,
+    width: 16,
+    height: 16,
+    cursor: 'nwse-resize',
+    color: theme.palette.text.disabled,
+    opacity: 0.5,
+    '&:hover': { opacity: 1 },
   },
 }))
 
@@ -199,9 +200,6 @@ TabPanel.propTypes = {
   index: PropTypes.number.isRequired,
 }
 
-// Pick the lyric track (an entry of the structured LyricList JSON stored in
-// media_file.lyrics) for the requested language: 'original' → the main track,
-// otherwise the synced translation whose lang matches.
 const pickLyricTrack = (list, lang) => {
   if (!Array.isArray(list) || list.length === 0) return null
   if (lang === 'original' || !lang) {
@@ -217,7 +215,7 @@ const pickLyricTrack = (list, lang) => {
 const hasTranslation = (list, lang) =>
   Array.isArray(list) && list.some((l) => l && l.kind === 'translation' && l.lang === lang && l.synced)
 
-// ---- Lyrics tab: full text without timestamps, current line highlighted ----
+// ---- Lyrics tab ----
 const LyricsTab = ({ record }) => {
   const classes = useStyles()
   const translate = useTranslate()
@@ -230,8 +228,6 @@ const LyricsTab = ({ record }) => {
   const activeLineRef = useRef(null)
   const scrollContainerRef = useRef(null)
 
-  // Re-read the song record so freshly generated lyrics (written to
-  // media_file.lyrics by the backend) show up without a full page reload.
   const { data: fresh } = useGetOne('song', record?.id, { enabled: !!record?.id })
   const lyricsSource = fresh?.lyrics || record?.lyrics
   const structured = useMemo(() => {
@@ -251,59 +247,51 @@ const LyricsTab = ({ record }) => {
   }, [track])
   const ruAvailable = useMemo(() => hasTranslation(structured, 'ru'), [structured])
 
-  // Active line index = last line whose start <= currentTimeMs. Matches the
-  // external player's own lyric parser semantics (line[].start is in ms).
   const activeIndex = useMemo(() => {
     if (lines.length === 0) return -1
     let idx = -1
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].start != null && lines[i].start <= currentTimeMs) idx = i
-      else if (lines[i].start == null) {
-        // un-synced lines never become "active" on their own
-      }
     }
-    return idx < 0 ? -1 : idx
+    return idx
   }, [lines, currentTimeMs])
 
-  // Subscribe to the audio element's timeupdate to track the live playback
-  // position. We locate the <audio> element directly in the DOM (the external
-  // navidrome-music-player renders exactly one) rather than going through a
-  // module singleton, because bundler code-splitting can hand different chunks
-  // separate copies of a shared module — breaking the registry read here.
+  // Subscribe to the <audio> element's timeupdate for live position. We read
+  // the element directly from the DOM (the external player renders exactly one)
+  // instead of a module singleton, which bundler code-splitting can split into
+  // separate copies and break the read.
   useEffect(() => {
-    let audio = getAudioInstance() || document.querySelector('audio')
+    const audio = document.querySelector('audio')
     if (!audio) return
     const onTime = () => setCurrentTimeMs(Math.floor((audio.currentTime || 0) * 1000))
     onTime()
     audio.addEventListener('timeupdate', onTime)
     return () => audio.removeEventListener('timeupdate', onTime)
-  }, [])
+  }, [record?.id])
 
-  // Auto-scroll the active line into view (without hijacking vertical scroll
-  // fights: only when the user isn't interacting).
   useEffect(() => {
     if (activeLineRef.current && scrollContainerRef.current) {
       activeLineRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
   }, [activeIndex])
 
-  // Poll lyrics status while a generation task is queued/running.
   useEffect(() => {
     if (!record || !record.id) return
     if (!lyricsStatus || (lyricsStatus.status !== 'queued' && lyricsStatus.status !== 'running')) return
     const timer = setInterval(() => {
       httpClient(`/api/ai/lyrics/status?mediaFileId=${encodeURIComponent(record.id)}`)
-        .then(({ json }) => {
-          setLyricsStatus(json)
-          // Once done, force a re-read of the record so new lyrics appear.
-          if (json && json.status === 'done') {
-            // refetch handled by react-admin cache invalidation below
-          }
-        })
+        .then(({ json }) => setLyricsStatus(json))
         .catch(() => {})
     }, 2000)
     return () => clearInterval(timer)
   }, [record, lyricsStatus])
+
+  // Reset transient state when the track changes so stale content never lingers.
+  useEffect(() => {
+    setLyricsStatus(null)
+    setFetching(false)
+    setCurrentTimeMs(0)
+  }, [record?.id])
 
   const handleGenerate = async () => {
     if (!record || !record.id) return
@@ -324,10 +312,9 @@ const LyricsTab = ({ record }) => {
 
   const busy = fetching || (lyricsStatus && (lyricsStatus.status === 'queued' || lyricsStatus.status === 'running'))
 
-  // No lyrics at all → empty state with a generate button.
   if (!track || lines.length === 0) {
     return (
-      <div className={classes.panelScroll} ref={scrollContainerRef}>
+      <div className={classes.panelScroll} ref={scrollContainerRef} style={{ position: 'relative' }}>
         {busy ? (
           <div className={classes.statusBox}>
             <CircularProgress size={18} />
@@ -343,14 +330,7 @@ const LyricsTab = ({ record }) => {
             <Typography variant="body2" paragraph>
               {translate('ai.window.noLyrics')}
             </Typography>
-            <Button
-              className={classes.generateBtn}
-              variant="contained"
-              color="primary"
-              size="small"
-              startIcon={<MdLyrics />}
-              onClick={handleGenerate}
-            >
+            <Button className={classes.generateBtn} variant="contained" color="primary" size="small" startIcon={<MdLyrics />} onClick={handleGenerate}>
               {translate('ai.window.generateLyrics')}
             </Button>
           </div>
@@ -360,26 +340,8 @@ const LyricsTab = ({ record }) => {
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
       <div className={classes.panelScroll} ref={scrollContainerRef}>
-        {ruAvailable && (
-          <div className={classes.lyricsLangSwitch}>
-            <button
-              type="button"
-              className={`${classes.langBtn} ${lyricLang === 'original' ? classes.langBtnActive : ''}`}
-              onClick={() => dispatch(setLyricLang('original'))}
-            >
-              {translate('ai.window.original')}
-            </button>
-            <button
-              type="button"
-              className={`${classes.langBtn} ${lyricLang === 'ru' ? classes.langBtnActive : ''}`}
-              onClick={() => dispatch(setLyricLang('ru'))}
-            >
-              {translate('ai.window.russian')}
-            </button>
-          </div>
-        )}
         {lines.map((l, i) => (
           <div
             key={i}
@@ -395,13 +357,33 @@ const LyricsTab = ({ record }) => {
           </Typography>
         )}
       </div>
+      {ruAvailable && (
+        <div className={classes.langRail}>
+          <button
+            type="button"
+            title={translate('ai.window.original')}
+            className={`${classes.langBtn} ${lyricLang === 'original' ? classes.langBtnActive : ''}`}
+            onClick={() => dispatch(setLyricLang('original'))}
+          >
+            О
+          </button>
+          <button
+            type="button"
+            title={translate('ai.window.russian')}
+            className={`${classes.langBtn} ${lyricLang === 'ru' ? classes.langBtnActive : ''}`}
+            onClick={() => dispatch(setLyricLang('ru'))}
+          >
+            RU
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
 LyricsTab.propTypes = { record: PropTypes.object }
 
-// ---- Meaning tab: render the .ai.decode.md markdown ----
+// ---- Meaning tab ----
 const MeaningTab = ({ record }) => {
   const classes = useStyles()
   const translate = useTranslate()
@@ -512,19 +494,27 @@ const MeaningTab = ({ record }) => {
 
 MeaningTab.propTypes = { record: PropTypes.object }
 
-// ---- The draggable floating window ----
+// ---- The resizable, draggable floating window ----
 const AIWindow = ({ open, onClose, record }) => {
   const classes = useStyles()
   const translate = useTranslate()
   const [tab, setTab] = useState(0)
-  const dragRef = useRef(null)
 
-  // Initial position: centered horizontally, lower-right-ish. react-draggable
-  // works in transformed coordinates; defaultPosition sets the starting offset.
-  const defaultPos = useMemo(() => ({
-    x: Math.max(16, Math.floor((typeof window !== 'undefined' ? window.innerWidth : 1024) / 2 - WINDOW_WIDTH / 2)),
-    y: 80,
-  }), [])
+  const initial = useMemo(() => {
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1280
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 800
+    const w = Math.min(480, vw - 32)
+    const h = Math.min(vh - PLAYER_BAR_RESERVE - 24, 560)
+    return {
+      x: Math.max(16, Math.floor(vw / 2 - w / 2)),
+      y: 24,
+      width: w,
+      height: h,
+    }
+  }, [])
+
+  const [size, setSize] = useState({ width: initial.width, height: initial.height })
+  const [pos, setPos] = useState({ x: initial.x, y: initial.y })
 
   useEffect(() => {
     if (open) setTab(0)
@@ -532,9 +522,27 @@ const AIWindow = ({ open, onClose, record }) => {
 
   if (!open || !record) return null
 
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 800
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1280
+
   return (
-    <Draggable nodeRef={dragRef} handle=".ai-window-header" defaultPosition={defaultPos} cancel="[role=button],button,a">
-      <Paper ref={dragRef} className={classes.root} elevation={8}>
+    <Rnd
+      className={classes.rnd}
+      size={{ width: size.width, height: size.height }}
+      position={{ x: pos.x, y: pos.y }}
+      onDragStop={(_, d) => setPos({ x: d.x, y: d.y })}
+      onResizeStop={(_, __, ref, ___, delta) => {
+        setSize({ width: ref.offsetWidth, height: ref.offsetHeight })
+      }}
+      bounds="window"
+      dragHandleClassName="ai-window-header"
+      minWidth={MIN_W}
+      minHeight={MIN_H}
+      maxWidth={vw - 16}
+      maxHeight={vh - 16}
+      enableResizing={{ bottomRight: true, right: true, bottom: true }}
+    >
+      <Paper className={classes.root} elevation={8}>
         <Box className={`${classes.header} ai-window-header`}>
           <span className={classes.headerTitle}>
             <MdLyrics fontSize="small" />
@@ -573,8 +581,13 @@ const AIWindow = ({ open, onClose, record }) => {
             <MeaningTab record={record} />
           </TabPanel>
         </Box>
+
+        {/* resize affordance */}
+        <svg className={classes.resizeHandle} viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M16 16 L16 8 L8 16 Z" fill="currentColor" />
+        </svg>
       </Paper>
-    </Draggable>
+    </Rnd>
   )
 }
 
