@@ -38,12 +38,13 @@ const stylesheet = `
   color: #1db954;
 }
 
-/* Glassmorphism bottom panel: translucent dark surface + blur over content */
+/* Glassmorphism bottom panel: translucent dark surface + strong blur so the
+   album artwork / page content shows through. */
 .react-jinke-music-player-main .music-player-panel {
-  background-color: rgba(18, 18, 18, 0.92) !important;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background-color: rgba(18, 18, 18, 0.72) !important;
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* Keep the mobile/full panel readable on the dark surface */
@@ -54,11 +55,21 @@ const stylesheet = `
   background-color: transparent;
 }
 
-/* Queue panel surface */
+/* Queue panel surface — frosted glass */
 .audio-lists-panel {
-  background-color: rgba(24, 24, 24, 0.96) !important;
+  background-color: rgba(18, 18, 18, 0.82) !important;
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Lyric panel — frosted glass */
+.react-jinke-music-player-main .music-player-lyric {
+  background-color: rgba(18, 18, 18, 0.6) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  border-radius: 8px;
+  padding: 6px 12px;
 }
 
 /* Lyric toggle button + play/pause hover accent */

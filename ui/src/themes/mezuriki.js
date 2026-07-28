@@ -141,23 +141,35 @@ export default {
       label: { paddingRight: '0.7rem', paddingLeft: '0.5rem' },
     },
     MuiPaper: {
-      root: { backgroundColor: gray.surface },
+      root: {
+        backgroundColor: 'rgba(24, 24, 24, 0.72)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+      },
       rounded: { borderRadius: 12 },
     },
     MuiCard: {
       root: {
-        backgroundColor: gray.surface,
+        backgroundColor: 'rgba(24, 24, 24, 0.72)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
         borderRadius: 12,
         backgroundImage: 'none',
-        boxShadow: 'none',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
       },
     },
     MuiChip: {
-      root: { backgroundColor: gray.hover, color: gray.text2 },
+      root: { backgroundColor: 'rgba(40, 40, 40, 0.7)', color: gray.text2, backdropFilter: 'blur(8px)' },
     },
     MuiDrawer: {
-      paper: { backgroundColor: '#000000' },
-      root: { backgroundColor: '#000000' },
+      // Sidebar: frosted translucent black panel — content scrolls behind it.
+      paper: {
+        backgroundColor: 'rgba(0, 0, 0, 0.78) !important',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderRight: '1px solid rgba(255,255,255,0.06)',
+      },
+      root: { backgroundColor: 'rgba(0, 0, 0, 0.78)' },
     },
     MuiTableRow: {
       root: {
@@ -183,12 +195,25 @@ export default {
     },
     MuiAppBar: {
       root: {
-        backgroundColor: `${gray.bg}cc !important`,
-        backdropFilter: 'blur(12px)',
+        // Frosted-glass header: translucent dark surface + strong blur, so the
+        // album artwork / content shows through as the user scrolls. Color must
+        // be set explicitly — react-admin's AppBar defaults to `color="default"`
+        // which resolves to dark text (for light surfaces); on this dark glass
+        // that made the title unreadable (dark-on-dark).
+        backgroundColor: 'rgba(18, 18, 18, 0.55) !important',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        color: '#fff !important',
         boxShadow: 'none',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
       },
-      positionFixed: { backgroundColor: `${gray.bg}cc !important`, boxShadow: 'none' },
+      positionFixed: {
+        backgroundColor: 'rgba(18, 18, 18, 0.55) !important',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        boxShadow: 'none',
+      },
+      colorDefault: { color: '#fff !important' },
     },
     MuiFilledInput: {
       root: {
@@ -405,7 +430,14 @@ export default {
         '@global': { '> .MuiButton-label': { padding: 0 } },
       },
     },
-    RaSidebar: { root: { height: 'initial', backgroundColor: '#000' } },
+    RaSidebar: {
+      root: {
+        height: 'initial',
+        backgroundColor: 'rgba(0, 0, 0, 0.78) !important',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+      },
+    },
   },
   player: {
     theme: 'dark',
