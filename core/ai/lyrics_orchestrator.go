@@ -117,44 +117,64 @@ func (s *Service) runLyricsPipeline(ctx context.Context, userId string, mf *mode
 
 	store := newLyricsStore()
 
-	// --- Step 1: original synced lyrics via LRCLIB (exact then fuzzy search) ---
+	// --- Step 1: original synced lyrics.
+	// Reuse the existing .lrc sidecar if present — re-fetching from LRCLIB would
+	// waste time and overwrite a good file. This makes the pipeline idempotent.
 	s.saveStatus(ctx, userId, mediaFileId, LyricsTaskStatus{
 		Status: StatusRunning, Step: StepLyrics, UpdatedAt: time.Now().Unix(),
 	})
 
-	original, lang, err := s.fetchOriginal(taskCtx, provider, mf)
-	if err != nil {
-		fail(StepLyrics, err.Error())
-		return
-	}
-	if original == "" {
-		fail(StepLyrics, "lyrics not found in LRCLIB")
-		return
+	var original string
+	var lang string
+	if existing, ok := store.readSidecar(mf, ".lrc"); ok && existing != "" {
+		log.Info(ctx, "Original lyrics sidecar already exists, reusing", "track", mf.Title)
+		original = existing
+		lang = "en" // sidecars don't carry the source language reliably
+	} else {
+		var err error
+		original, lang, err = s.fetchOriginal(taskCtx, provider, mf)
+		if err != nil {
+			fail(StepLyrics, err.Error())
+			return
+		}
+		if original == "" {
+			fail(StepLyrics, "lyrics not found in LRCLIB")
+			return
+		}
 	}
 
 	// --- Step 2: Russian translation, reusing the original's timing ---
-	// Skip translation when the original is already Russian (or looks Russian)
-	// — translating it would be wrong and waste Gemini quota.
+	// Skip translation when:
+	//   - the .ru.lrc sidecar already exists (idempotent — don't re-spend AI quota)
+	//   - the original is already Russian (translating it would be wrong)
 	translation := ""
-	if !isRussianText(stripLRCTimestamps(original)) {
+	needTranslation := !isRussianText(stripLRCTimestamps(original))
+	if needTranslation && store.hasSidecar(mf, ".ru.lrc") {
+		log.Info(ctx, "RU translation sidecar already exists, skipping", "track", mf.Title)
+		needTranslation = false
+	}
+	if needTranslation {
 		s.saveStatus(ctx, userId, mediaFileId, LyricsTaskStatus{
 			Status: StatusRunning, Step: StepTranslation, LyricsHit: true,
 		})
+		var err error
 		translation, err = s.translateLyrics(taskCtx, provider, mf, original)
 		if err != nil {
 			fail(StepTranslation, err.Error())
 			return
 		}
-	} else {
+	} else if isRussianText(stripLRCTimestamps(original)) {
 		log.Info(ctx, "Original lyrics are Russian, skipping translation", "track", mf.Title)
 	}
 
-	// --- Step 3: persist sidecar files ---
-	if err := store.writeSidecar(mf, ".lrc", ensureLangHeader(original, lang)); err != nil {
-		fail(StepLyrics, err.Error())
-		return
+	// --- Step 3: persist sidecar files (only the ones we actually produced) ---
+	if !store.hasSidecar(mf, ".lrc") {
+		if err := store.writeSidecar(mf, ".lrc", ensureLangHeader(original, lang)); err != nil {
+			fail(StepLyrics, err.Error())
+			return
+		}
 	}
-	if translation != "" {
+	if translation != "" && !store.hasSidecar(mf, ".ru.lrc") {
 		ru := alignToOriginalTiming(original, translation)
 		if err := store.writeSidecar(mf, ".ru.lrc", ensureLangHeader(ru, "ru")); err != nil {
 			fail(StepTranslation, err.Error())
