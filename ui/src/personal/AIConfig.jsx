@@ -46,6 +46,7 @@ const useStyles = makeStyles((theme) => ({
 }))
 
 const AIProviderChoices = [
+  { id: 'zai', name: 'Z.ai (GLM-5, coding plan) — Recommended' },
   { id: 'gemini', name: 'Google Gemini (3.5 Flash)' },
   { id: 'openai', name: 'OpenAI (GPT-4o, GPT-3.5)' },
   { id: 'anthropic', name: 'Anthropic (Claude)' },
@@ -68,6 +69,12 @@ const DefaultLanguageChoices = [
 ]
 
 const placeholders = {
+  zai: {
+    // Coding Plan endpoint (OpenAI-compatible). Standard API is
+    // https://api.z.ai/api/paas/v4 (without /coding).
+    apiEndpoint: 'https://api.z.ai/api/coding/paas/v4',
+    model: 'glm-5-turbo',
+  },
   gemini: {
     apiEndpoint: 'https://generativelanguage.googleapis.com',
     model: 'gemini-3.5-flash',

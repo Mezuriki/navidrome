@@ -16,6 +16,13 @@ import (
 // aiConfigKey is the UserProps key under which the AI config (as JSON) is stored per-user.
 const aiConfigKey = "ai_config"
 
+// Z.ai (Zhipu GLM) defaults. The Coding Plan endpoint is separate from the
+// standard public API; both are OpenAI-compatible.
+const (
+	defaultZAIEndpoint = "https://api.z.ai/api/coding/paas/v4"
+	defaultZAIModel    = "glm-5-turbo"
+)
+
 // maskPlaceholder is the masked value returned to the client in place of the
 // API key. When the client sends it back, the previously stored key is kept.
 const maskPlaceholder = "********"
@@ -276,6 +283,20 @@ func (s *Service) createProvider(config Config) (LLMProvider, error) {
 			return NewOpenAIProvider(config.APIKey, config.APIEndpoint, config.Model)
 		}
 		return NewOllamaProvider(config.APIEndpoint, config.Model)
+	case "zai":
+		// Z.ai (Zhipu) — OpenAI-compatible. The Coding Plan uses a dedicated
+		// endpoint at https://api.z.ai/api/coding/paas/v4 (the standard API is
+		// .../api/paas/v4). Both accept the standard /chat/completions path and
+		// Authorization: Bearer header, so the OpenAI client works unchanged.
+		endpoint := config.APIEndpoint
+		if endpoint == "" {
+			endpoint = defaultZAIEndpoint
+		}
+		model := config.Model
+		if model == "" {
+			model = defaultZAIModel
+		}
+		return NewOpenAIProvider(config.APIKey, endpoint, model)
 	case "openai", "localai", "openrouter", "anthropic":
 		// All of these expose an OpenAI-compatible /v1/chat/completions endpoint.
 		return NewOpenAIProvider(config.APIKey, config.APIEndpoint, config.Model)
@@ -292,7 +313,7 @@ func isOpenAICompatible(endpoint string) bool {
 
 // GetSupportedProviders returns a list of supported provider names.
 func GetSupportedProviders() []string {
-	return []string{"gemini", "openai", "anthropic", "ollama", "localai", "openrouter"}
+	return []string{"gemini", "zai", "openai", "anthropic", "ollama", "localai", "openrouter"}
 }
 
 // MissingLyricsItem describes a track and whether it already has a synced
