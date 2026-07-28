@@ -317,13 +317,15 @@ func GetSupportedProviders() []string {
 }
 
 // MissingLyricsItem describes a track and whether it already has a synced
-// lyrics sidecar (.lrc). Used by external orchestrators (Mixarr) to decide
-// which tracks still need lyrics enrichment.
+// lyrics sidecar (.lrc) and/or a Russian translation sidecar (.ru.lrc). Used
+// by external orchestrators (Mixarr) to decide which tracks still need lyrics
+// enrichment or RU translation.
 type MissingLyricsItem struct {
-	MediaFileID string `json:"mediaFileId"`
-	Title       string `json:"title"`
-	Artist      string `json:"artist"`
-	HasLyrics   bool   `json:"hasLyrics"`
+	MediaFileID    string `json:"mediaFileId"`
+	Title          string `json:"title"`
+	Artist         string `json:"artist"`
+	HasLyrics      bool   `json:"hasLyrics"`
+	HasTranslation bool   `json:"hasTranslation"`
 }
 
 // MissingLyrics lists the tracks of an artist or album and flags those missing
@@ -358,10 +360,11 @@ func (s *Service) MissingLyrics(ctx context.Context, userId, artistId, albumId s
 	for i := range mfs {
 		mf := &mfs[i]
 		items = append(items, MissingLyricsItem{
-			MediaFileID: mf.ID,
-			Title:       mf.Title,
-			Artist:      mf.Artist,
-			HasLyrics:   store.hasSidecar(mf, ".lrc"),
+			MediaFileID:    mf.ID,
+			Title:          mf.Title,
+			Artist:         mf.Artist,
+			HasLyrics:      store.hasSidecar(mf, ".lrc"),
+			HasTranslation: store.hasSidecar(mf, ".ru.lrc"),
 		})
 	}
 	return items, nil
