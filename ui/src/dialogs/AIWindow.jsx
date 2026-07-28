@@ -30,7 +30,12 @@ const useStyles = makeStyles((theme) => ({
     height: '100%',
     display: 'flex',
     flexDirection: 'column',
-    boxShadow: theme.shadows[8],
+    // Strong elevation + a visible border so the window is clearly separated
+    // from the page content behind it. In light themes the page cards are also
+    // white, so without this the window would visually merge with the cards
+    // and look like the background "turned white" when the window opened.
+    boxShadow: theme.shadows[24],
+    border: `1px solid ${theme.palette.divider}`,
     backgroundColor: theme.palette.background.paper,
     overflow: 'hidden',
     borderRadius: theme.shape.borderRadius,

@@ -1,8 +1,11 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import { useSelector, useDispatch } from 'react-redux'
+import { ThemeProvider } from '@material-ui/core/styles'
+import { createMuiTheme } from 'react-admin'
 import AIWindow from '../dialogs/AIWindow'
 import { closeAIDrawer } from '../actions'
+import useCurrentTheme from '../themes/useCurrentTheme'
 
 // Normalise a player queue item / audioInfo into the record shape the AI window
 // expects (id, title, artist, album, year, genre, lyrics). The player stores
@@ -29,19 +32,29 @@ const AIDrawerContainer = () => {
   const dispatch = useDispatch()
   const aiDrawer = useSelector((state) => state.aiDrawer || { open: false, record: undefined, followPlayer: false })
   const currentTrack = useSelector((state) => state.player?.current)
+  // The window is rendered as a sibling of <RALayout> in Layout.jsx, i.e. OUTSIDE
+  // react-admin's ThemeProvider. Without its own ThemeProvider, makeStyles() in
+  // AIWindow falls back to the default (light) MUI theme and the generated
+  // class rules (e.g. for MuiCard) leak globally — turning the dark-theme page
+  // cards white whenever the window mounts. Wrapping it here in a ThemeProvider
+  // with the active app theme isolates the styles and keeps them dark.
+  const theme = useCurrentTheme()
 
   const handleClose = () => dispatch(closeAIDrawer())
 
   // When the window was opened from the player toolbar (followPlayer), the
   // displayed record should always reflect the currently-playing track, so
-  // switching songs in the player immediately refreshes the window's data
-  // (metadata, lyrics, meaning) without reopening it.
+  // switching songs in the player immediately refreshes the window's data.
   let record = aiDrawer.record
   if (aiDrawer.open && aiDrawer.followPlayer) {
     record = toRecord(currentTrack) || aiDrawer.record
   }
 
-  return <AIWindow open={aiDrawer.open} onClose={handleClose} record={record} />
+  return (
+    <ThemeProvider theme={createMuiTheme(theme)}>
+      <AIWindow open={aiDrawer.open} onClose={handleClose} record={record} />
+    </ThemeProvider>
+  )
 }
 
 AIDrawerContainer.propTypes = {}
