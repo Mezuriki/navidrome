@@ -31,7 +31,7 @@ import { AlbumContextMenu } from '../common'
 import { DraggableTypes } from '../consts'
 import { formatFullDate } from '../utils'
 
-const useStyles = makeStyles({
+const useStyles = makeStyles((theme) => ({
   subtitle: {
     whiteSpace: 'nowrap',
     overflow: 'hidden',
@@ -66,7 +66,7 @@ const useStyles = makeStyles({
   },
   headerStyle: {
     '& thead': {
-      boxShadow: '0px 3px 3px rgba(0, 0, 0, 0.15)',
+      boxShadow: theme.shadows[1],
     },
     '& th': {
       fontWeight: 'bold',
@@ -76,6 +76,9 @@ const useStyles = makeStyles({
   contextMenu: {
     visibility: (props) => (props.isDesktop ? 'hidden' : 'visible'),
   },
+}),
+{
+  name: 'NDSongDatagrid',
 })
 
 const DiscSubtitleRow = forwardRef(

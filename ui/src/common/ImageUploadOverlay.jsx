@@ -8,7 +8,7 @@ import config from '../config'
 import { REST_URL } from '../consts'
 import { httpClient } from '../dataProvider'
 
-const useStyles = makeStyles(() => ({
+const useStyles = makeStyles((theme) => ({
   coverOverlay: {
     position: 'absolute',
     bottom: 0,
@@ -25,7 +25,7 @@ const useStyles = makeStyles(() => ({
     },
   },
   overlayButton: {
-    color: '#fff',
+    color: theme.palette.common.white,
     padding: '4px',
     '&:hover': {
       backgroundColor: 'rgba(255,255,255,0.2)',

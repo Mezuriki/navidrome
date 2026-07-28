@@ -1,5 +1,6 @@
 import LightTheme from './light'
 import DarkTheme from './dark'
+import MezurikiTheme from './mezuriki'
 import ExtraDarkTheme from './extradark'
 import GreenTheme from './green'
 import SpotifyTheme from './spotify'
@@ -25,6 +26,7 @@ export default {
   // Classic default themes
   LightTheme,
   DarkTheme,
+  MezurikiTheme,
 
   // New themes should be added here, in alphabetic order
   AmusicTheme,

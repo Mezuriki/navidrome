@@ -55,7 +55,7 @@ const useStyles = makeStyles({
   ratingField: {
     visibility: 'hidden',
   },
-})
+}, { name: 'NDAlbumTableView' })
 
 const AlbumDatagridRow = (props) => {
   const { record, className } = props

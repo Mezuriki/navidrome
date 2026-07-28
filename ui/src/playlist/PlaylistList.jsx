@@ -32,7 +32,7 @@ import ChangePublicStatusButton from './ChangePublicStatusButton'
 
 const useStyles = makeStyles((theme) => ({
   button: {
-    color: theme.palette.type === 'dark' ? 'white' : undefined,
+    color: theme.palette.text.primary,
   },
 }))
 

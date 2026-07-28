@@ -12,7 +12,7 @@ import AIDrawerContainer from '../common/AIDrawer'
 
 const useStyles = makeStyles({
   root: { paddingBottom: (props) => (props.addPadding ? '80px' : 0) },
-})
+}, { name: 'NDLayout' })
 
 const Layout = (props) => {
   const theme = useCurrentTheme()

@@ -13,7 +13,7 @@ import { useDispatch } from 'react-redux'
 import config from '../config'
 
 const useStyles = makeStyles(
-  {
+  (theme) => ({
     link: {
       textDecoration: 'none',
       color: 'inherit',
@@ -37,7 +37,7 @@ const useStyles = makeStyles(
     },
     timeStamp: {
       float: 'right',
-      color: '#fff',
+      color: theme.palette.text.secondary,
       fontWeight: '200',
       opacity: 0.6,
       fontSize: '12px',
@@ -46,7 +46,7 @@ const useStyles = makeStyles(
     rightIcon: {
       top: '26px',
     },
-  },
+  }),
   { name: 'RaSongSimpleList' },
 )
 

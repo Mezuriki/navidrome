@@ -65,7 +65,7 @@ const useStyles = makeStyles({
   ratingField: {
     visibility: 'hidden',
   },
-})
+}, { name: 'NDArtistList' })
 
 const ArtistFilter = (props) => {
   const translate = useTranslate()

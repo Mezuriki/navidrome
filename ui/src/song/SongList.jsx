@@ -63,7 +63,7 @@ const useStyles = makeStyles({
     margin: 0,
     height: '24px',
   },
-})
+}, { name: 'NDSongList' })
 
 const SongFilter = (props) => {
   const classes = useStyles()

@@ -32,7 +32,8 @@ const useStyles = makeStyles((theme) => ({
     color: theme.palette.text.primary,
     fontWeight: 'bold',
   },
-}))
+}),
+{ name: 'NDMenu' })
 
 const translatedResourceName = (resource, translate) =>
   translate(`resources.${resource.name}.name`, {
