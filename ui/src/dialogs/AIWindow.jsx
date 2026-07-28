@@ -17,6 +17,13 @@ const WINDOW_WIDTH = 480
 const useStyles = makeStyles((theme) => ({
   root: {
     position: 'fixed',
+    // react-draggable applies the position as a CSS `transform: translate(x,y)`,
+    // so the element must be anchored at the viewport origin for the translate
+    // to map to actual screen coordinates. Without these explicit zeros the
+    // fixed element inherits a document-flow offset (e.g. after the page
+    // content) and the window renders far below the fold / off-screen.
+    top: 0,
+    left: 0,
     zIndex: theme.zIndex.modal + 1,
     width: WINDOW_WIDTH,
     maxWidth: '92vw',
@@ -24,8 +31,6 @@ const useStyles = makeStyles((theme) => ({
     display: 'flex',
     flexDirection: 'column',
     boxShadow: theme.shadows[8],
-    // Let the outer Draggable control positioning (translate), but keep a sane
-    // default placement via the initial left/top set inline by the component.
   },
   header: {
     display: 'flex',
@@ -260,11 +265,13 @@ const LyricsTab = ({ record }) => {
     return idx < 0 ? -1 : idx
   }, [lines, currentTimeMs])
 
-  // Subscribe to the audio element's timeupdate to track the live position.
-  // The element is shared from the player via the process-wide registry; we
-  // attach our own listener and keep the position in local state.
+  // Subscribe to the audio element's timeupdate to track the live playback
+  // position. We locate the <audio> element directly in the DOM (the external
+  // navidrome-music-player renders exactly one) rather than going through a
+  // module singleton, because bundler code-splitting can hand different chunks
+  // separate copies of a shared module — breaking the registry read here.
   useEffect(() => {
-    const audio = getAudioInstance()
+    let audio = getAudioInstance() || document.querySelector('audio')
     if (!audio) return
     const onTime = () => setCurrentTimeMs(Math.floor((audio.currentTime || 0) * 1000))
     onTime()
@@ -526,7 +533,7 @@ const AIWindow = ({ open, onClose, record }) => {
   if (!open || !record) return null
 
   return (
-    <Draggable nodeRef={dragRef} handle=".ai-window-header" defaultPosition={defaultPos} bounds="window" cancel="[role=button],button,a">
+    <Draggable nodeRef={dragRef} handle=".ai-window-header" defaultPosition={defaultPos} cancel="[role=button],button,a">
       <Paper ref={dragRef} className={classes.root} elevation={8}>
         <Box className={`${classes.header} ai-window-header`}>
           <span className={classes.headerTitle}>
