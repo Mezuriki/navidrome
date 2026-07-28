@@ -357,19 +357,27 @@ func (e *geminiAPIError) Error() string {
 	return fmt.Sprintf("Gemini API error (code %d, status %s): %s", e.code, e.status, e.message)
 }
 
-// isQuotaError reports whether the error is a 429 / RESOURCE_EXHAUSTED quota
-// failure, which is the trigger for switching to the next model in the chain.
+// isQuotaError reports whether the error is a transient/throttle failure that
+// should trigger a switch to the next model in the chain. This covers explicit
+// quota exhaustion (429/RESOURCE_EXHAUSTED) AND temporary overload (503
+// "high demand"/UNAVAILABLE), which Gemini returns under spikes — treating it
+// as retryable lets the fallback chain try a different, less-loaded model.
 func isQuotaError(err error) bool {
 	gae, ok := err.(*geminiAPIError)
 	if !ok {
 		return false
 	}
-	if gae.code == 429 || gae.status == "RESOURCE_EXHAUSTED" {
+	if gae.code == 429 || gae.code == 503 ||
+		gae.status == "RESOURCE_EXHAUSTED" || gae.status == "UNAVAILABLE" {
 		return true
 	}
-	// Some quota messages arrive with code 400 but a clear "quota" wording.
+	// Some quota/overload messages arrive with a different code but clear wording.
 	m := strings.ToLower(gae.message)
-	return strings.Contains(m, "quota") || strings.Contains(m, "rate limit")
+	return strings.Contains(m, "quota") ||
+		strings.Contains(m, "rate limit") ||
+		strings.Contains(m, "high demand") ||
+		strings.Contains(m, "overloaded") ||
+		strings.Contains(m, "try again later")
 }
 
 // nextFallbackModel returns the model that follows `current` in the fallback

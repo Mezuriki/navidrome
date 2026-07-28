@@ -351,9 +351,9 @@ func encodeJSON(w http.ResponseWriter, data interface{}) {
 }
 
 // writeAIError maps a provider error to an HTTP response. Quota / rate-limit /
-// region failures return 503 (Service Unavailable) with a retryable flag so the
-// UI can show a friendly "try again later" message instead of a generic 500.
-// Everything else stays a 500.
+// region / transient-overload failures return 503 (Service Unavailable) with a
+// retryable flag so the UI can show a friendly "try again later" message and
+// orchestrators (Mixarr) can back off and retry. Everything else stays a 500.
 func writeAIError(w http.ResponseWriter, err error) {
 	msg := err.Error()
 	low := strings.ToLower(msg)
@@ -361,7 +361,11 @@ func writeAIError(w http.ResponseWriter, err error) {
 		strings.Contains(low, "rate limit") ||
 		strings.Contains(low, "resource_exhausted") ||
 		strings.Contains(low, "429") ||
-		strings.Contains(low, "location is not supported")
+		strings.Contains(low, "location is not supported") ||
+		strings.Contains(low, "high demand") ||
+		strings.Contains(low, "overloaded") ||
+		strings.Contains(low, "try again later") ||
+		strings.Contains(low, "status unavailable")
 
 	status := http.StatusInternalServerError
 	if retryable {
