@@ -19,9 +19,15 @@ const MIN_H = 320
 
 const useStyles = makeStyles((theme) => ({
   rnd: {
-    // The Rnd wrapper itself is positioned by the library; we only need a high
-    // z-index so the window floats above all app chrome (sidebars, the player
-    // bar at z-index 99) WITHOUT a backdrop — the background stays interactive.
+    // react-rnd (via react-draggable) positions its root with an INLINE
+    // `style="position: absolute"` + a CSS transform. Absolute means it scrolls
+    // WITH the page and the window disappears when the user scrolls. We MUST use
+    // !important to override that inline style and force `position: fixed`, so
+    // the transform becomes viewport-relative and the window floats over the
+    // content, always staying on screen regardless of scroll position.
+    position: 'fixed !important',
+    // High z-index so the window floats above all app chrome (sidebars, the
+    // player bar at z-index 99) WITHOUT a backdrop — background stays interactive.
     zIndex: theme.zIndex.modal + 50,
   },
   root: {
