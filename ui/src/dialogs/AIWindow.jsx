@@ -140,6 +140,55 @@ const useStyles = makeStyles((theme) => ({
     color: theme.palette.primary.contrastText,
     borderColor: theme.palette.primary.main,
   },
+  // Manual lyric sync controls (±0.5s), pinned to the bottom-right of the panel,
+  // below the language rail, so it never overlaps the scrollbar.
+  syncRail: {
+    position: 'absolute',
+    bottom: theme.spacing(2),
+    right: theme.spacing(2),
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    zIndex: 2,
+  },
+  syncBtn: {
+    width: 34,
+    height: 24,
+    minWidth: 0,
+    padding: 0,
+    borderRadius: 999,
+    border: `1px solid ${theme.palette.divider}`,
+    background: theme.palette.background.paper,
+    color: theme.palette.text.primary,
+    fontSize: '0.62rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+    lineHeight: 1,
+    '&:hover': { backgroundColor: theme.palette.action.hover, borderColor: theme.palette.primary.main },
+  },
+  syncValue: {
+    fontSize: '0.6rem',
+    color: theme.palette.text.secondary,
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1.1,
+    textAlign: 'center',
+  },
+  syncReset: {
+    width: 18,
+    height: 18,
+    minWidth: 0,
+    padding: 0,
+    borderRadius: 999,
+    border: 'none',
+    background: 'transparent',
+    color: theme.palette.text.disabled,
+    fontSize: '0.7rem',
+    cursor: 'pointer',
+    lineHeight: 1,
+    '&:hover': { color: theme.palette.error.main },
+  },
   // --- Lyrics tab ---
   lyricLine: {
     padding: theme.spacing(0.6, 1),
@@ -260,14 +309,38 @@ const LyricsTab = ({ record }) => {
   }, [track])
   const ruAvailable = useMemo(() => hasTranslation(structured, 'ru'), [structured])
 
+  // Per-track lyric timing offset in ms, persisted in localStorage so the user's
+  // manual sync adjustment survives reopening the window. A positive offset means
+  // the lyric line is shown EARLIER (lyrics lag behind playback → shift forward).
+  const offsetKey = record?.id ? `ai_lyric_offset_${record.id}` : null
+  const [lyricOffsetMs, setLyricOffsetMs] = useState(() => {
+    if (!offsetKey) return 0
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(offsetKey) : null
+    const n = raw ? parseInt(raw, 10) : 0
+    return Number.isFinite(n) ? n : 0
+  })
+  const adjustOffset = useCallback(
+    (deltaMs) => {
+      setLyricOffsetMs((prev) => {
+        const next = prev + deltaMs
+        if (offsetKey) localStorage.setItem(offsetKey, String(next))
+        return next
+      })
+    },
+    [offsetKey],
+  )
+
   const activeIndex = useMemo(() => {
     if (lines.length === 0) return -1
+    // Apply the manual offset: subtract it from the line start when comparing,
+    // so a +500ms offset makes each line active 500ms earlier.
+    const adjusted = currentTimeMs - lyricOffsetMs
     let idx = -1
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].start != null && lines[i].start <= currentTimeMs) idx = i
+      if (lines[i].start != null && lines[i].start <= adjusted) idx = i
     }
     return idx
-  }, [lines, currentTimeMs])
+  }, [lines, currentTimeMs, lyricOffsetMs])
 
   // Subscribe to the <audio> element's timeupdate for live position. We read
   // the element directly from the DOM (the external player renders exactly one)
@@ -387,6 +460,39 @@ const LyricsTab = ({ record }) => {
             >
               RU
             </button>
+          </div>
+        )}
+        {lines.some((l) => l.start != null) && (
+          <div className={classes.syncRail}>
+            <button
+              type="button"
+              title={translate('ai.window.syncBack')}
+              className={classes.syncBtn}
+              onClick={() => adjustOffset(-500)}
+            >
+              −0.5с
+            </button>
+            <span className={classes.syncValue} title={translate('ai.window.syncHint')}>
+              {lyricOffsetMs > 0 ? `+${(lyricOffsetMs / 1000).toFixed(1)}с` : `${(lyricOffsetMs / 1000).toFixed(1)}с`}
+            </span>
+            <button
+              type="button"
+              title={translate('ai.window.syncForward')}
+              className={classes.syncBtn}
+              onClick={() => adjustOffset(500)}
+            >
+              +0.5с
+            </button>
+            {lyricOffsetMs !== 0 && (
+              <button
+                type="button"
+                title={translate('ai.window.syncReset')}
+                className={classes.syncReset}
+                onClick={() => adjustOffset(-lyricOffsetMs)}
+              >
+                ✕
+              </button>
+            )}
           </div>
         )}
       </div>
