@@ -300,6 +300,83 @@ func (h *AIHandler) MissingDecode(w http.ResponseWriter, r *http.Request) {
 	encodeJSON(w, map[string]interface{}{"items": items})
 }
 
+// FetchOriginalLyrics fetches ORIGINAL synced lyrics from LRCLIB only (Phase A).
+// Synchronous, no translation. Body: {"mediaFileId": "<id>"}.
+func (h *AIHandler) FetchOriginalLyrics(w http.ResponseWriter, r *http.Request) {
+	userId, ok := userFromCtx(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var req struct {
+		MediaFileID string `json:"mediaFileId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.MediaFileID == "" {
+		http.Error(w, "mediaFileId is required", http.StatusBadRequest)
+		return
+	}
+	found, err := h.aiService.FetchOriginalLyrics(r.Context(), userId, req.MediaFileID)
+	if err != nil {
+		writeAIError(w, err)
+		return
+	}
+	encodeJSON(w, map[string]interface{}{"ok": true, "found": found, "mediaFileId": req.MediaFileID})
+}
+
+// TranslateBatch translates up to N songs in one LLM call (Phase B).
+// Body: {"items": [{mediaFileId, title, artist, lyrics}], "toLang": "ru"}.
+func (h *AIHandler) TranslateBatch(w http.ResponseWriter, r *http.Request) {
+	userId, ok := userFromCtx(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var req ai.TranslateBatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(req.Items) == 0 {
+		http.Error(w, "items are required", http.StatusBadRequest)
+		return
+	}
+	results, err := h.aiService.TranslateBatch(r.Context(), userId, &req)
+	if err != nil {
+		writeAIError(w, err)
+		return
+	}
+	encodeJSON(w, map[string]interface{}{"results": results})
+}
+
+// DecodeBatch generates meaning-decode for up to N songs in one LLM call (Phase C).
+// Body: {"items": [{mediaFileId, title, artist, album, lyrics}]}.
+func (h *AIHandler) DecodeBatch(w http.ResponseWriter, r *http.Request) {
+	userId, ok := userFromCtx(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var req ai.DecodeBatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(req.Items) == 0 {
+		http.Error(w, "items are required", http.StatusBadRequest)
+		return
+	}
+	results, err := h.aiService.DecodeBatch(r.Context(), userId, &req)
+	if err != nil {
+		writeAIError(w, err)
+		return
+	}
+	encodeJSON(w, map[string]interface{}{"results": results})
+}
+
 // Test verifies the AI provider configuration by sending a minimal probe
 // request. It accepts an optional JSON body {provider, apiKey, apiEndpoint,
 // model} so a key can be tested before being saved. With no body or an empty

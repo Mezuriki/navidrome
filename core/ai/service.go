@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -408,4 +409,305 @@ func (s *Service) MissingDecode(ctx context.Context, userId, artistId, albumId s
 		})
 	}
 	return items, nil
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Phase endpoints (3-phase pipeline): LRCLIB-only, translate-batch, decode-batch.
+// These let Mixarr drive the phases separately so Z.ai quota is spent only on
+// what's actually missing, and translation/decode are batched (5 songs → 1 LLM
+// call) to stay under Z.ai's concurrent-request limit.
+// ──────────────────────────────────────────────────────────────────────────
+
+// FetchOriginalLyrics fetches the ORIGINAL synced lyrics from LRCLIB only (no
+// translation, no AI). Synchronous. Idempotent: if a .lrc sidecar already
+// exists, it returns immediately. Writes the .lrc and updates the DB so the web
+// player shows it. This is "Phase A" of the 3-phase pipeline.
+func (s *Service) FetchOriginalLyrics(ctx context.Context, userId, mediaFileId string) (bool, error) {
+	mf, err := s.ds.MediaFile(ctx).Get(mediaFileId)
+	if err != nil {
+		return false, fmt.Errorf("loading media file: %w", err)
+	}
+
+	store := newLyricsStore()
+	if store.hasSidecar(mf, ".lrc") {
+		return true, nil // already have original
+	}
+
+	// LRCLIB only (no AI provider needed for this step).
+	original, lang, err := s.fetchOriginal(ctx, nil, mf)
+	if err != nil {
+		return false, err
+	}
+	if original == "" {
+		return false, nil // not found in LRCLIB
+	}
+
+	if err := store.writeSidecar(mf, ".lrc", ensureLangHeader(original, lang)); err != nil {
+		return false, err
+	}
+
+	// Update the DB so the web player shows it immediately.
+	if err := s.persistLyricsToDB(ctx, mf, original, ""); err != nil {
+		log.Warn(ctx, "Failed to update media_file.lyrics (sidecar written)", "error", err)
+	}
+	return true, nil
+}
+
+// TranslateBatchRequest is the body of POST /api/ai/translate/batch.
+type TranslateBatchRequest struct {
+	Items  []TranslateBatchItem `json:"items"`
+	ToLang string               `json:"toLang"`
+	Model  string               `json:"model,omitempty"`
+}
+
+// TranslateBatchItem is one song in a batch translation request.
+type TranslateBatchItem struct {
+	MediaFileID string `json:"mediaFileId"`
+	Title       string `json:"title"`
+	Artist      string `json:"artist"`
+	Lyrics      string `json:"lyrics"`
+}
+
+// TranslateBatchResult is the per-song outcome.
+type TranslateBatchResult struct {
+	MediaFileID string `json:"mediaFileId"`
+	OK          bool   `json:"ok"`
+	Error       string `json:"error,omitempty"`
+	Skipped     bool   `json:"skipped,omitempty"`
+}
+
+// TranslateBatch translates up to N songs in a SINGLE LLM call, splitting the
+// model's output by a sentinel separator. This is "Phase B" — it requires the
+// original .lrc to already exist (Phase A). Idempotent: songs with an existing
+// .ru.lrc are skipped.
+func (s *Service) TranslateBatch(ctx context.Context, userId string, req *TranslateBatchRequest) ([]TranslateBatchResult, error) {
+	provider, err := s.getProvider(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
+	if req.ToLang == "" {
+		req.ToLang = "ru"
+	}
+
+	store := newLyricsStore()
+	results := make([]TranslateBatchResult, 0, len(req.Items))
+
+	// Partition: skip songs that already have .ru.lrc, and songs whose original
+	// is Russian (nothing to translate). Collect the rest for the batch call.
+	type pending struct {
+		idx int
+		mf  *model.MediaFile
+		lrc string
+	}
+	var queue []pending
+	for i, item := range req.Items {
+		mf, err := s.ds.MediaFile(ctx).Get(item.MediaFileID)
+		if err != nil {
+			results = append(results, TranslateBatchResult{MediaFileID: item.MediaFileID, Error: "media file not found"})
+			continue
+		}
+		if store.hasSidecar(mf, ".ru.lrc") {
+			results = append(results, TranslateBatchResult{MediaFileID: item.MediaFileID, OK: true, Skipped: true})
+			continue
+		}
+		// Read the original .lrc (must exist from Phase A).
+		original, ok := store.readSidecar(mf, ".lrc")
+		if !ok {
+			results = append(results, TranslateBatchResult{MediaFileID: item.MediaFileID, Error: "no .lrc original"})
+			continue
+		}
+		plain := stripLRCTimestamps(original)
+		if isRussianText(plain) {
+			results = append(results, TranslateBatchResult{MediaFileID: item.MediaFileID, OK: true, Skipped: true})
+			continue
+		}
+		queue = append(queue, pending{idx: i, mf: mf, lrc: original})
+	}
+
+	if len(queue) == 0 {
+		return results, nil
+	}
+
+	// Build one combined prompt: songs separated by ===SONG===.
+	var sb strings.Builder
+	for i, p := range queue {
+		plain := stripLRCTimestamps(p.lrc)
+		fmt.Fprintf(&sb, "===SONG %d===\nTitle: %s\nArtist: %s\n\n%s\n", i+1, p.mf.Title, p.mf.Artist, plain)
+	}
+
+	// Prepend batch instructions so the provider's own prompt template still
+	// applies but the model knows about the ===SONG N=== separator convention.
+	batchIntro := "Multiple songs are separated by lines containing exactly ===SONG N=== (N is the song number). " +
+		"Translate EVERY song to " + langName(req.ToLang) + ". Keep the ===SONG N=== separators between translations. " +
+		"Output ONLY the translations with their separators, no explanations, no markdown.\n\n"
+
+	resp, err := provider.Translate(ctx, &TranslateRequest{
+		Title:  "batch",
+		Artist: "batch",
+		Lyrics: batchIntro + sb.String(),
+		ToLang: req.ToLang,
+		Model:  req.Model,
+	})
+	if err != nil {
+		// Mark all pending as failed.
+		for _, p := range queue {
+			results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, Error: err.Error()})
+		}
+		return results, nil
+	}
+
+	// Split the response by ===SONG=== and write each .ru.lrc.
+	parts := splitBatchResponse(resp.Translation, len(queue))
+	for i, p := range queue {
+		translation := ""
+		if i < len(parts) {
+			translation = strings.TrimSpace(parts[i])
+		}
+		if translation == "" || strings.Contains(strings.ToLower(translation), "could not find the lyrics") {
+			results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, Error: "empty translation"})
+			continue
+		}
+		ru := alignToOriginalTiming(p.lrc, translation)
+		if err := store.writeSidecar(p.mf, ".ru.lrc", ensureLangHeader(ru, "ru")); err != nil {
+			results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, Error: err.Error()})
+			continue
+		}
+		// Update DB so the player shows the translation.
+		originalLRC := p.lrc
+		if err := s.persistLyricsToDB(ctx, p.mf, originalLRC, translation); err != nil {
+			log.Warn(ctx, "Failed to update DB lyrics (sidecar written)", "error", err)
+		}
+		results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, OK: true})
+	}
+	return results, nil
+}
+
+// DecodeBatchRequest is the body of POST /api/ai/decode/batch.
+type DecodeBatchRequest struct {
+	Items []DecodeBatchItem `json:"items"`
+	Model string            `json:"model,omitempty"`
+}
+
+// DecodeBatchItem is one song in a batch decode request.
+type DecodeBatchItem struct {
+	MediaFileID string `json:"mediaFileId"`
+	Title       string `json:"title"`
+	Artist      string `json:"artist"`
+	Album       string `json:"album"`
+	Lyrics      string `json:"lyrics"`
+}
+
+// DecodeBatch generates meaning-decode for up to N songs in a SINGLE LLM call,
+// splitting the model's output by a per-song marker. Idempotent: songs with an
+// existing .ai.decode.md are skipped.
+func (s *Service) DecodeBatch(ctx context.Context, userId string, req *DecodeBatchRequest) ([]TranslateBatchResult, error) {
+	provider, err := s.getProvider(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	store := newLyricsStore()
+	results := make([]TranslateBatchResult, 0, len(req.Items))
+
+	type pending struct {
+		idx int
+		mf  *model.MediaFile
+		it  DecodeBatchItem
+	}
+	var queue []pending
+	for i, item := range req.Items {
+		mf, err := s.ds.MediaFile(ctx).Get(item.MediaFileID)
+		if err != nil {
+			results = append(results, TranslateBatchResult{MediaFileID: item.MediaFileID, Error: "media file not found"})
+			continue
+		}
+		if store.hasSidecar(mf, ".ai.decode.md") {
+			results = append(results, TranslateBatchResult{MediaFileID: item.MediaFileID, OK: true, Skipped: true})
+			continue
+		}
+		queue = append(queue, pending{idx: i, mf: mf, it: item})
+	}
+
+	if len(queue) == 0 {
+		return results, nil
+	}
+
+	// Build one combined decode prompt: songs separated by ===DECODE N===.
+	var sb strings.Builder
+	sb.WriteString("Проанализируй несколько песен. Каждая песня отделена строкой ===DECODE N=== (N — номер). " +
+		"Для каждой песни верни анализ СТРОГО в формате Markdown (## Смысл, ## Настроение, ## Темы, ## Комментарий) " +
+		"и НАЧИНАЙ блок каждой песни со строки ===DECODE N===. Пиши на русском.\n\n")
+	for i, p := range queue {
+		fmt.Fprintf(&sb, "===DECODE %d===\nПесня: %s\nИсполнитель: %s\n", i+1, p.it.Title, p.it.Artist)
+		if p.it.Album != "" {
+			fmt.Fprintf(&sb, "Альбом: %s\n", p.it.Album)
+		}
+		if strings.TrimSpace(p.it.Lyrics) != "" {
+			fmt.Fprintf(&sb, "\nТекст песни:\n%s\n", p.it.Lyrics)
+		} else {
+			sb.WriteString("\nТекст не предоставлен — интерпретируй по названию и исполнителю.\n")
+		}
+		sb.WriteString("\n")
+	}
+
+	// Decode builds its own prompt from DecodeRequest fields. We smuggle the
+	// combined batch text into Lyrics so the decode prompt includes it verbatim.
+	resp, err := provider.Decode(ctx, &DecodeRequest{
+		Title:  "batch decode",
+		Artist: "multiple",
+		Album:  "",
+		Lyrics: sb.String(),
+		Model:  req.Model,
+	})
+	if err != nil {
+		for _, p := range queue {
+			results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, Error: err.Error()})
+		}
+		return results, nil
+	}
+
+	// Split by ===DECODE N=== and write each .ai.decode.md.
+	parts := splitBatchResponse(resp.Text, len(queue))
+	for i, p := range queue {
+		text := ""
+		if i < len(parts) {
+			text = strings.TrimSpace(parts[i])
+		}
+		if text == "" {
+			results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, Error: "empty decode"})
+			continue
+		}
+		s.persistResult(ctx, p.mf.ID, ".ai.decode.md", text)
+		results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, OK: true})
+	}
+	return results, nil
+}
+
+// splitBatchResponse splits a model's batched output by the ===MARKER N===
+// sentinel and returns N parts. It handles cases where the model omits or
+// mangles the separator by best-effort line scanning.
+func splitBatchResponse(text string, expected int) []string {
+	// Try splitting by any ===... N=== line.
+	var parts []string
+	current := strings.Builder{}
+	re := regexp.MustCompile(`^={2,}\w*\s*\d+\s*={2,}`)
+	for _, line := range strings.Split(text, "\n") {
+		if re.MatchString(strings.TrimSpace(line)) {
+			if current.Len() > 0 {
+				parts = append(parts, current.String())
+			}
+			current.Reset()
+			continue
+		}
+		current.WriteString(line)
+		current.WriteString("\n")
+	}
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
+	}
+	// If splitting failed (model ignored markers), return the whole text as one.
+	if len(parts) < expected {
+		return []string{text}
+	}
+	return parts
 }

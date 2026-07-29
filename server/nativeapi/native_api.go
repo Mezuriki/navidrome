@@ -300,12 +300,21 @@ func (api *Router) addAIRoute(r chi.Router) {
 				r.Post("/fetch", func(w http.ResponseWriter, r *http.Request) {
 					api.aiHandler.FetchLyrics(w, r)
 				})
+				r.Post("/fetch-original", func(w http.ResponseWriter, r *http.Request) {
+					api.aiHandler.FetchOriginalLyrics(w, r)
+				})
 				r.Get("/status", func(w http.ResponseWriter, r *http.Request) {
 					api.aiHandler.LyricsStatus(w, r)
 				})
 				r.Get("/missing", func(w http.ResponseWriter, r *http.Request) {
 					api.aiHandler.MissingLyrics(w, r)
 				})
+			})
+			r.Post("/translate/batch", func(w http.ResponseWriter, r *http.Request) {
+				api.aiHandler.TranslateBatch(w, r)
+			})
+			r.Post("/decode/batch", func(w http.ResponseWriter, r *http.Request) {
+				api.aiHandler.DecodeBatch(w, r)
 			})
 	})
 }
