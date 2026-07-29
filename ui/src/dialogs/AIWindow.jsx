@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import PropTypes from 'prop-types'
 import { useDispatch, useSelector } from 'react-redux'
 import { Paper, Box, Tabs, Tab, Typography, IconButton, Chip, Button, CircularProgress } from '@material-ui/core'
@@ -18,17 +19,24 @@ const MIN_W = 340
 const MIN_H = 320
 
 const useStyles = makeStyles((theme) => ({
-  rnd: {
-    // react-rnd (via react-draggable) positions its root with an INLINE
-    // `style="position: absolute"` + a CSS transform. Absolute means it scrolls
-    // WITH the page and the window disappears when the user scrolls. We MUST use
-    // !important to override that inline style and force `position: fixed`, so
-    // the transform becomes viewport-relative and the window floats over the
-    // content, always staying on screen regardless of scroll position.
-    position: 'fixed !important',
-    // High z-index so the window floats above all app chrome (sidebars, the
-    // player bar at z-index 99) WITHOUT a backdrop — background stays interactive.
+  rndWrapper: {
+    // A full-viewport container rendered via Portal on document.body.
+    // react-rnd uses position:absolute + transform internally; by giving it a
+    // fixed full-viewport parent, the absolute positioning is effectively
+    // viewport-relative (== fixed behaviour) without fighting react-rnd's
+    // inline styles.
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: '100vw',
+    height: '100vh',
+    pointerEvents: 'none',
     zIndex: theme.zIndex.modal + 50,
+  },
+  rnd: {
+    // The Rnd element itself — pointer-events re-enabled so the window is
+    // interactive, but the wrapper is transparent to clicks elsewhere.
+    pointerEvents: 'auto',
   },
   root: {
     position: 'relative',
@@ -416,13 +424,34 @@ const LyricsTab = ({ record }) => {
         ) : (
           <div className={classes.lyricEmpty}>
             <Typography variant="body2" paragraph>
-              {translate('ai.window.noLyrics')}
+              {lyricLang === 'ru' ? translate('ai.window.noRu') : translate('ai.window.noLyrics')}
             </Typography>
-            <Button className={classes.generateBtn} variant="contained" color="primary" size="small" startIcon={<MdLyrics />} onClick={handleGenerate}>
-              {translate('ai.window.generateLyrics')}
-            </Button>
+            {lyricLang !== 'ru' && (
+              <Button className={classes.generateBtn} variant="contained" color="primary" size="small" startIcon={<MdLyrics />} onClick={handleGenerate}>
+                {translate('ai.window.generateLyrics')}
+              </Button>
+            )}
           </div>
         )}
+        {/* Language rail — always visible so the user can switch back. */}
+        <div className={classes.langRail}>
+          <button
+            type="button"
+            title={translate('ai.window.russian')}
+            className={`${classes.langBtn} ${lyricLang === 'ru' ? classes.langBtnActive : ''}`}
+            onClick={() => dispatch(setLyricLang('ru'))}
+          >
+            🇷🇺
+          </button>
+          <button
+            type="button"
+            title={translate('ai.window.original')}
+            className={`${classes.langBtn} ${lyricLang === 'original' ? classes.langBtnActive : ''}`}
+            onClick={() => dispatch(setLyricLang('original'))}
+          >
+            🇺🇳
+          </button>
+        </div>
       </div>
     )
   }
@@ -683,7 +712,8 @@ const AIWindow = ({ open, onClose, record }) => {
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1280
 
-  return (
+  return createPortal(
+    <div className={classes.rndWrapper}>
     <Rnd
       className={classes.rnd}
       size={{ width: size.width, height: size.height }}
@@ -766,6 +796,8 @@ const AIWindow = ({ open, onClose, record }) => {
         </svg>
       </Paper>
     </Rnd>
+    </div>
+    , document.body)
   )
 }
 
