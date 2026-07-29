@@ -52,7 +52,12 @@ const AIDrawerContainer = () => {
 
   return (
     <ThemeProvider theme={createMuiTheme(theme)}>
-      <AIWindow open={aiDrawer.open} onClose={handleClose} record={record} />
+      <AIWindow
+        key={aiDrawer.open ? `open-${record?.id || 'none'}` : 'closed'}
+        open={aiDrawer.open}
+        onClose={handleClose}
+        record={record}
+      />
     </ThemeProvider>
   )
 }

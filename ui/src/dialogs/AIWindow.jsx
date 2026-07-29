@@ -619,37 +619,20 @@ const AIWindow = ({ open, onClose, record }) => {
   const translate = useTranslate()
   const [tab, setTab] = useState(0)
 
-  const initial = useMemo(() => {
+  // Compute initial position/size FRESH every time the component mounts (via
+  // the `key` prop on the container which forces a remount on each open).
+  // Using useState with an inline initializer (not useMemo) guarantees the
+  // values reflect the current viewport at mount time.
+  const [size, setSize] = useState(() => {
     const vw = typeof window !== 'undefined' ? window.innerWidth : 1280
     const vh = typeof window !== 'undefined' ? window.innerHeight : 800
+    return { width: Math.min(480, vw - 32), height: Math.min(vh - PLAYER_BAR_RESERVE - 24, 560) }
+  })
+  const [pos, setPos] = useState(() => {
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1280
     const w = Math.min(480, vw - 32)
-    const h = Math.min(vh - PLAYER_BAR_RESERVE - 24, 560)
-    return {
-      x: Math.max(16, Math.floor(vw / 2 - w / 2)),
-      y: 24,
-      width: w,
-      height: h,
-    }
-  }, [])
-
-  const [size, setSize] = useState({ width: initial.width, height: initial.height })
-  const [pos, setPos] = useState({ x: initial.x, y: initial.y })
-  // Track whether the window was open last render. When it transitions from
-  // closed→open, we clamp the position SYNCHRONOUSLY (before Rnd renders) so
-  // the window never flashes off-screen. useEffect runs too late for this.
-  const wasOpenRef = useRef(false)
-  if (open && !wasOpenRef.current) {
-    // Window just opened — clamp position to current viewport immediately.
-    const vw = typeof window !== 'undefined' ? window.innerWidth : 1280
-    const vh = typeof window !== 'undefined' ? window.innerHeight : 800
-    const w = Math.min(size.width, vw - 32)
-    const maxX = Math.max(16, vw - w - 16)
-    const newY = Math.max(16, Math.min(vh - size.height - PLAYER_BAR_RESERVE - 8, 24))
-    // Set synchronously so Rnd renders with the correct position on first paint.
-    pos.x = Math.min(pos.x, maxX)
-    pos.y = newY
-  }
-  wasOpenRef.current = open
+    return { x: Math.max(16, Math.floor(vw / 2 - w / 2)), y: 24 }
+  })
 
   useEffect(() => {
     if (open) setTab(0)
