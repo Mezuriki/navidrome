@@ -121,23 +121,25 @@ const useStyles = makeStyles((theme) => ({
     zIndex: 2,
   },
   langBtn: {
-    width: 26,
-    height: 26,
+    width: 32,
+    height: 32,
     minWidth: 0,
     padding: 0,
     borderRadius: 999,
     border: `1px solid ${theme.palette.divider}`,
     background: theme.palette.background.paper,
     color: theme.palette.text.secondary,
-    fontSize: '0.66rem',
-    fontWeight: 600,
+    fontSize: '1.1rem',
     cursor: 'pointer',
     lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     '&:hover': { backgroundColor: theme.palette.action.hover },
   },
   langBtnActive: {
-    backgroundColor: theme.palette.primary.main,
-    color: theme.palette.primary.contrastText,
+    borderColor: theme.palette.primary.main,
+    boxShadow: `0 0 0 2px ${theme.palette.primary.main}`,
     borderColor: theme.palette.primary.main,
   },
   // Manual lyric sync controls (±0.5s), pinned to the bottom-right of the panel,
@@ -442,26 +444,24 @@ const LyricsTab = ({ record }) => {
             {translate('ai.window.noRu')}
           </Typography>
         )}
-        {ruAvailable && (
-          <div className={classes.langRail}>
-            <button
-              type="button"
-              title={translate('ai.window.original')}
-              className={`${classes.langBtn} ${lyricLang === 'original' ? classes.langBtnActive : ''}`}
-              onClick={() => dispatch(setLyricLang('original'))}
-            >
-              О
-            </button>
-            <button
-              type="button"
-              title={translate('ai.window.russian')}
-              className={`${classes.langBtn} ${lyricLang === 'ru' ? classes.langBtnActive : ''}`}
-              onClick={() => dispatch(setLyricLang('ru'))}
-            >
-              RU
-            </button>
-          </div>
-        )}
+        <div className={classes.langRail}>
+          <button
+            type="button"
+            title={translate('ai.window.russian')}
+            className={`${classes.langBtn} ${lyricLang === 'ru' ? classes.langBtnActive : ''}`}
+            onClick={() => dispatch(setLyricLang('ru'))}
+          >
+            🇷🇺
+          </button>
+          <button
+            type="button"
+            title={translate('ai.window.original')}
+            className={`${classes.langBtn} ${lyricLang === 'original' ? classes.langBtnActive : ''}`}
+            onClick={() => dispatch(setLyricLang('original'))}
+          >
+            🇺🇳
+          </button>
+        </div>
         {lines.some((l) => l.start != null) && (
           <div className={classes.syncRail}>
             <button
