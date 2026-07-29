@@ -704,8 +704,6 @@ const AIWindow = ({ open, onClose, record }) => {
       position={{ x: pos.x, y: pos.y }}
       onDrag={(_, d) => {
         // Live clamp DURING drag so the window can never leave the viewport.
-        // Without this, react-rnd lets the element go off-screen and only
-        // corrects on dragStop — by then it may be stuck behind an edge.
         const vw = window.innerWidth
         const vh = window.innerHeight
         const maxX = Math.max(0, vw - size.width - 4)
@@ -715,7 +713,6 @@ const AIWindow = ({ open, onClose, record }) => {
             x: Math.max(0, Math.min(d.x, maxX)),
             y: Math.max(0, Math.min(d.y, maxY)),
           })
-          return false // cancel the Rnd-internal move; our setPos takes over
         }
       }}
       onDragStop={handleDragStop}
@@ -729,7 +726,7 @@ const AIWindow = ({ open, onClose, record }) => {
           y: Math.min(p.y, Math.max(0, vh - newH - PLAYER_BAR_RESERVE)),
         }))
       }}
-      bounds="parent"
+      bounds={null}
       dragHandleClassName="ai-window-header"
       minWidth={MIN_W}
       minHeight={MIN_H}
