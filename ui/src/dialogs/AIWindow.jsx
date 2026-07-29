@@ -635,9 +635,22 @@ const AIWindow = ({ open, onClose, record }) => {
   const [size, setSize] = useState({ width: initial.width, height: initial.height })
   const [pos, setPos] = useState({ x: initial.x, y: initial.y })
 
+  // Reset to a visible position every time the window opens. The stored `pos`
+  // is viewport-relative (position:fixed), so if the user scrolled or resized
+  // since last close, the old position may be off-screen. Recenter top-right.
   useEffect(() => {
-    if (open) setTab(0)
-  }, [open, record?.id])
+    if (!open) return
+    setTab(0)
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const w = Math.min(size.width, vw - 32)
+    const maxX = Math.max(0, vw - w - 16)
+    // Place near the right edge, vertically centered, clamped to viewport.
+    const x = Math.max(16, Math.min(maxX, maxX))
+    const y = Math.max(16, Math.min(vh - size.height - PLAYER_BAR_RESERVE - 8, 24))
+    setPos({ x, y })
+    setSize((s) => ({ width: w, height: Math.min(s.height, vh - PLAYER_BAR_RESERVE - 16) }))
+  }, [open])
 
   // Keep the window fully inside the viewport whenever the browser window is
   // resized or zoomed, so it never ends up off-screen (the user reported the
@@ -689,6 +702,22 @@ const AIWindow = ({ open, onClose, record }) => {
       className={classes.rnd}
       size={{ width: size.width, height: size.height }}
       position={{ x: pos.x, y: pos.y }}
+      onDrag={(_, d) => {
+        // Live clamp DURING drag so the window can never leave the viewport.
+        // Without this, react-rnd lets the element go off-screen and only
+        // corrects on dragStop — by then it may be stuck behind an edge.
+        const vw = window.innerWidth
+        const vh = window.innerHeight
+        const maxX = Math.max(0, vw - size.width - 4)
+        const maxY = Math.max(0, vh - size.height - PLAYER_BAR_RESERVE)
+        if (d.x < 0 || d.y < 0 || d.x > maxX || d.y > maxY) {
+          setPos({
+            x: Math.max(0, Math.min(d.x, maxX)),
+            y: Math.max(0, Math.min(d.y, maxY)),
+          })
+          return false // cancel the Rnd-internal move; our setPos takes over
+        }
+      }}
       onDragStop={handleDragStop}
       onResizeStop={(_, __, ref) => {
         const newW = ref.offsetWidth
@@ -700,7 +729,7 @@ const AIWindow = ({ open, onClose, record }) => {
           y: Math.min(p.y, Math.max(0, vh - newH - PLAYER_BAR_RESERVE)),
         }))
       }}
-      bounds="window"
+      bounds="parent"
       dragHandleClassName="ai-window-header"
       minWidth={MIN_W}
       minHeight={MIN_H}

@@ -38,7 +38,7 @@ func NewOpenAIProvider(apiKey, endpoint, model string) (*OpenAIProvider, error) 
 
 	return &OpenAIProvider{
 		client: &http.Client{
-			Timeout: 120 * time.Second,
+			Timeout: 300 * time.Second,
 		},
 		apiKey:   apiKey,
 		endpoint: endpoint,
