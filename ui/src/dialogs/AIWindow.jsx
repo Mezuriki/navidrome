@@ -634,23 +634,26 @@ const AIWindow = ({ open, onClose, record }) => {
 
   const [size, setSize] = useState({ width: initial.width, height: initial.height })
   const [pos, setPos] = useState({ x: initial.x, y: initial.y })
-
-  // Reset to a visible position every time the window opens. The stored `pos`
-  // is viewport-relative (position:fixed), so if the user scrolled or resized
-  // since last close, the old position may be off-screen. Recenter top-right.
-  useEffect(() => {
-    if (!open) return
-    setTab(0)
-    const vw = window.innerWidth
-    const vh = window.innerHeight
+  // Track whether the window was open last render. When it transitions from
+  // closed→open, we clamp the position SYNCHRONOUSLY (before Rnd renders) so
+  // the window never flashes off-screen. useEffect runs too late for this.
+  const wasOpenRef = useRef(false)
+  if (open && !wasOpenRef.current) {
+    // Window just opened — clamp position to current viewport immediately.
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1280
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 800
     const w = Math.min(size.width, vw - 32)
-    const maxX = Math.max(0, vw - w - 16)
-    // Place near the right edge, vertically centered, clamped to viewport.
-    const x = Math.max(16, Math.min(maxX, maxX))
-    const y = Math.max(16, Math.min(vh - size.height - PLAYER_BAR_RESERVE - 8, 24))
-    setPos({ x, y })
-    setSize((s) => ({ width: w, height: Math.min(s.height, vh - PLAYER_BAR_RESERVE - 16) }))
-  }, [open])
+    const maxX = Math.max(16, vw - w - 16)
+    const newY = Math.max(16, Math.min(vh - size.height - PLAYER_BAR_RESERVE - 8, 24))
+    // Set synchronously so Rnd renders with the correct position on first paint.
+    pos.x = Math.min(pos.x, maxX)
+    pos.y = newY
+  }
+  wasOpenRef.current = open
+
+  useEffect(() => {
+    if (open) setTab(0)
+  }, [open, record?.id])
 
   // Keep the window fully inside the viewport whenever the browser window is
   // resized or zoomed, so it never ends up off-screen (the user reported the
