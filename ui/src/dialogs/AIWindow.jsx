@@ -796,8 +796,8 @@ const AIWindow = ({ open, onClose, record }) => {
         </svg>
       </Paper>
     </Rnd>
-    </div>
-    , document.body)
+    </div>,
+    document.body,
   )
 }
 
