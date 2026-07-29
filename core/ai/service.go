@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 	"sync"
 
@@ -540,41 +539,24 @@ func (s *Service) TranslateBatch(ctx context.Context, userId string, req *Transl
 		return results, nil
 	}
 
-	// Build one combined prompt: songs separated by ===SONG===.
-	var sb strings.Builder
-	for i, p := range queue {
+	// Process each song with its OWN translate call (sequential, not batched).
+	// provider.Translate rebuilds the prompt from TranslateRequest fields, so a
+	// combined batch prompt gets mangled into "Song: batch by batch". Sequential
+	// calls give Z.ai the real song title/artist/lyrics for each track.
+	for _, p := range queue {
 		plain := stripLRCTimestamps(p.lrc)
-		fmt.Fprintf(&sb, "===SONG %d===\nTitle: %s\nArtist: %s\n\n%s\n", i+1, p.mf.Title, p.mf.Artist, plain)
-	}
-
-	// Prepend batch instructions so the provider's own prompt template still
-	// applies but the model knows about the ===SONG N=== separator convention.
-	batchIntro := "Multiple songs are separated by lines containing exactly ===SONG N=== (N is the song number). " +
-		"Translate EVERY song to " + langName(req.ToLang) + ". Keep the ===SONG N=== separators between translations. " +
-		"Output ONLY the translations with their separators, no explanations, no markdown.\n\n"
-
-	resp, err := provider.Translate(ctx, &TranslateRequest{
-		Title:  "batch",
-		Artist: "batch",
-		Lyrics: batchIntro + sb.String(),
-		ToLang: req.ToLang,
-		Model:  req.Model,
-	})
-	if err != nil {
-		// Mark all pending as failed.
-		for _, p := range queue {
+		resp, err := provider.Translate(ctx, &TranslateRequest{
+			Title:  p.mf.Title,
+			Artist: p.mf.Artist,
+			Lyrics: plain,
+			ToLang: req.ToLang,
+			Model:  req.Model,
+		})
+		if err != nil {
 			results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, Error: err.Error()})
+			continue
 		}
-		return results, nil
-	}
-
-	// Split the response by ===SONG=== and write each .ru.lrc.
-	parts := splitBatchResponse(resp.Translation, len(queue))
-	for i, p := range queue {
-		translation := ""
-		if i < len(parts) {
-			translation = strings.TrimSpace(parts[i])
-		}
+		translation := strings.TrimSpace(resp.Translation)
 		if translation == "" || strings.Contains(strings.ToLower(translation), "could not find the lyrics") {
 			results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, Error: "empty translation"})
 			continue
@@ -584,9 +566,7 @@ func (s *Service) TranslateBatch(ctx context.Context, userId string, req *Transl
 			results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, Error: err.Error()})
 			continue
 		}
-		// Update DB so the player shows the translation.
-		originalLRC := p.lrc
-		if err := s.persistLyricsToDB(ctx, p.mf, originalLRC, translation); err != nil {
+		if err := s.persistLyricsToDB(ctx, p.mf, p.lrc, translation); err != nil {
 			log.Warn(ctx, "Failed to update DB lyrics (sidecar written)", "error", err)
 		}
 		results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, OK: true})
@@ -644,47 +624,31 @@ func (s *Service) DecodeBatch(ctx context.Context, userId string, req *DecodeBat
 		return results, nil
 	}
 
-	// Build one combined decode prompt: songs separated by ===DECODE N===.
-	var sb strings.Builder
-	sb.WriteString("Проанализируй несколько песен. Каждая песня отделена строкой ===DECODE N=== (N — номер). " +
-		"Для каждой песни верни анализ СТРОГО в формате Markdown (## Смысл, ## Настроение, ## Темы, ## Комментарий) " +
-		"и НАЧИНАЙ блок каждой песни со строки ===DECODE N===. Пиши на русском.\n\n")
-	for i, p := range queue {
-		fmt.Fprintf(&sb, "===DECODE %d===\nПесня: %s\nИсполнитель: %s\n", i+1, p.it.Title, p.it.Artist)
-		if p.it.Album != "" {
-			fmt.Fprintf(&sb, "Альбом: %s\n", p.it.Album)
+	// Process each song with its OWN decode call (sequential, not batched).
+	// Batching via a combined prompt doesn't work because provider.Decode
+	// rebuilds the prompt from DecodeRequest fields, ignoring the batch
+	// instructions. Sequential calls are reliable and Z.ai handles them fine.
+	for _, p := range queue {
+		// Read lyrics from .lrc sidecar if available.
+		lyricsText := p.it.Lyrics
+		if strings.TrimSpace(lyricsText) == "" {
+			if lrc, ok := store.readSidecar(p.mf, ".lrc"); ok {
+				lyricsText = stripLRCTimestamps(lrc)
+			}
 		}
-		if strings.TrimSpace(p.it.Lyrics) != "" {
-			fmt.Fprintf(&sb, "\nТекст песни:\n%s\n", p.it.Lyrics)
-		} else {
-			sb.WriteString("\nТекст не предоставлен — интерпретируй по названию и исполнителю.\n")
-		}
-		sb.WriteString("\n")
-	}
-
-	// Decode builds its own prompt from DecodeRequest fields. We smuggle the
-	// combined batch text into Lyrics so the decode prompt includes it verbatim.
-	resp, err := provider.Decode(ctx, &DecodeRequest{
-		Title:  "batch decode",
-		Artist: "multiple",
-		Album:  "",
-		Lyrics: sb.String(),
-		Model:  req.Model,
-	})
-	if err != nil {
-		for _, p := range queue {
+		resp, err := provider.Decode(ctx, &DecodeRequest{
+			Title:       p.it.Title,
+			Artist:      p.it.Artist,
+			Album:       p.it.Album,
+			Lyrics:      lyricsText,
+			Model:       req.Model,
+			MediaFileID: p.mf.ID,
+		})
+		if err != nil {
 			results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, Error: err.Error()})
+			continue
 		}
-		return results, nil
-	}
-
-	// Split by ===DECODE N=== and write each .ai.decode.md.
-	parts := splitBatchResponse(resp.Text, len(queue))
-	for i, p := range queue {
-		text := ""
-		if i < len(parts) {
-			text = strings.TrimSpace(parts[i])
-		}
+		text := strings.TrimSpace(resp.Text)
 		if text == "" {
 			results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, Error: "empty decode"})
 			continue
@@ -693,33 +657,4 @@ func (s *Service) DecodeBatch(ctx context.Context, userId string, req *DecodeBat
 		results = append(results, TranslateBatchResult{MediaFileID: p.mf.ID, OK: true})
 	}
 	return results, nil
-}
-
-// splitBatchResponse splits a model's batched output by the ===MARKER N===
-// sentinel and returns N parts. It handles cases where the model omits or
-// mangles the separator by best-effort line scanning.
-func splitBatchResponse(text string, expected int) []string {
-	// Try splitting by any ===... N=== line.
-	var parts []string
-	current := strings.Builder{}
-	re := regexp.MustCompile(`^={2,}\w*\s*\d+\s*={2,}`)
-	for _, line := range strings.Split(text, "\n") {
-		if re.MatchString(strings.TrimSpace(line)) {
-			if current.Len() > 0 {
-				parts = append(parts, current.String())
-			}
-			current.Reset()
-			continue
-		}
-		current.WriteString(line)
-		current.WriteString("\n")
-	}
-	if current.Len() > 0 {
-		parts = append(parts, current.String())
-	}
-	// If splitting failed (model ignored markers), return the whole text as one.
-	if len(parts) < expected {
-		return []string{text}
-	}
-	return parts
 }
