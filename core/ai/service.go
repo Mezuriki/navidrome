@@ -360,12 +360,24 @@ func (s *Service) MissingLyrics(ctx context.Context, userId, artistId, albumId s
 	items := make([]MissingLyricsItem, 0, len(mfs))
 	for i := range mfs {
 		mf := &mfs[i]
+		hasLrc := store.hasSidecar(mf, ".lrc")
+		// HasTranslation is true when a .ru.lrc sidecar exists OR when the original
+		// .lrc is already in Russian (no translation needed — the original IS the
+		// translation). This way Russian artists don't show as "missing RU".
+		hasTrans := store.hasSidecar(mf, ".ru.lrc")
+		if !hasTrans && hasLrc {
+			if original, ok := store.readSidecar(mf, ".lrc"); ok && original != "" {
+				if isRussianText(stripLRCTimestamps(original)) {
+					hasTrans = true
+				}
+			}
+		}
 		items = append(items, MissingLyricsItem{
 			MediaFileID:    mf.ID,
 			Title:          mf.Title,
 			Artist:         mf.Artist,
-			HasLyrics:      store.hasSidecar(mf, ".lrc"),
-			HasTranslation: store.hasSidecar(mf, ".ru.lrc"),
+			HasLyrics:      hasLrc,
+			HasTranslation: hasTrans,
 		})
 	}
 	return items, nil
