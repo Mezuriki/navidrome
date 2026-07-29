@@ -129,15 +129,16 @@ const useStyles = makeStyles((theme) => ({
     zIndex: 2,
   },
   langBtn: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 24,
     minWidth: 0,
     padding: 0,
-    borderRadius: 999,
+    borderRadius: 4,
     border: `1px solid ${theme.palette.divider}`,
     background: theme.palette.background.paper,
-    color: theme.palette.text.secondary,
-    fontSize: '1.1rem',
+    color: theme.palette.text.primary,
+    fontSize: '0.62rem',
+    fontWeight: 700,
     cursor: 'pointer',
     lineHeight: 1,
     display: 'flex',
@@ -145,10 +146,21 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'center',
     '&:hover': { backgroundColor: theme.palette.action.hover },
   },
+  langBtnRu: {
+    background: 'linear-gradient(to bottom, #fff 33%, #0039A6 33%, #0039A6 66%, #D52B1E 66%)',
+    color: '#fff',
+    textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+    border: '1px solid rgba(255,255,255,0.3)',
+  },
+  langBtnOrig: {
+    background: 'linear-gradient(135deg, #4285F4 0%, #34A853 25%, #FBBC05 50%, #EA4335 75%, #4285F4 100%)',
+    color: '#fff',
+    textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+    border: '1px solid rgba(255,255,255,0.3)',
+  },
   langBtnActive: {
-    borderColor: theme.palette.primary.main,
-    boxShadow: `0 0 0 2px ${theme.palette.primary.main}`,
-    borderColor: theme.palette.primary.main,
+    boxShadow: `0 0 0 2px ${theme.palette.primary.main}, 0 0 8px ${theme.palette.primary.main}88`,
+    transform: 'scale(1.08)',
   },
   // Manual lyric sync controls (±0.5s), pinned to the bottom-right of the panel,
   // below the language rail, so it never overlaps the scrollbar.
@@ -438,18 +450,18 @@ const LyricsTab = ({ record }) => {
           <button
             type="button"
             title={translate('ai.window.russian')}
-            className={`${classes.langBtn} ${lyricLang === 'ru' ? classes.langBtnActive : ''}`}
+            className={`${classes.langBtn} ${classes.langBtnRu} ${lyricLang === 'ru' ? classes.langBtnActive : ''}`}
             onClick={() => dispatch(setLyricLang('ru'))}
           >
-            🇷🇺
+            RU
           </button>
           <button
             type="button"
             title={translate('ai.window.original')}
-            className={`${classes.langBtn} ${lyricLang === 'original' ? classes.langBtnActive : ''}`}
+            className={`${classes.langBtn} ${classes.langBtnOrig} ${lyricLang === 'original' ? classes.langBtnActive : ''}`}
             onClick={() => dispatch(setLyricLang('original'))}
           >
-            🇺🇳
+            ORIG
           </button>
         </div>
       </div>
@@ -477,18 +489,18 @@ const LyricsTab = ({ record }) => {
           <button
             type="button"
             title={translate('ai.window.russian')}
-            className={`${classes.langBtn} ${lyricLang === 'ru' ? classes.langBtnActive : ''}`}
+            className={`${classes.langBtn} ${classes.langBtnRu} ${lyricLang === 'ru' ? classes.langBtnActive : ''}`}
             onClick={() => dispatch(setLyricLang('ru'))}
           >
-            🇷🇺
+            RU
           </button>
           <button
             type="button"
             title={translate('ai.window.original')}
-            className={`${classes.langBtn} ${lyricLang === 'original' ? classes.langBtnActive : ''}`}
+            className={`${classes.langBtn} ${classes.langBtnOrig} ${lyricLang === 'original' ? classes.langBtnActive : ''}`}
             onClick={() => dispatch(setLyricLang('original'))}
           >
-            🇺🇳
+            ORIG
           </button>
         </div>
         {lines.some((l) => l.start != null) && (

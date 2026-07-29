@@ -326,11 +326,19 @@ func loadSidecarLyrics(fsys storage.MusicFS, track *model.MediaFile) {
 	ext := path.Ext(track.Path)
 	baseRel := track.Path[:len(track.Path)-len(ext)]
 
-	// Parse existing embedded lyrics (if any).
+	// Parse existing embedded lyrics (if any non-trivial). A bare "[]" or empty
+	// string means the tags have no real lyrics — skip so sidecars take over.
 	var list model.LyricList
-	if track.Lyrics != "" {
-		if existing, err := model.ParseLyrics(".lrc", "xxx", []byte(track.Lyrics)); err == nil {
-			list = existing
+	embedded := strings.TrimSpace(track.Lyrics)
+	if embedded != "" && embedded != "[]" && embedded != "null" {
+		if existing, err := model.ParseLyrics(".lrc", "xxx", []byte(embedded)); err == nil && len(existing) > 0 {
+			// Verify the parsed lyrics actually have content (not just empty lines).
+			for _, l := range existing {
+				if len(l.Line) > 0 && l.Line[0].Value != "" {
+					list = existing
+					break
+				}
+			}
 		}
 	}
 
@@ -343,7 +351,7 @@ func loadSidecarLyrics(fsys storage.MusicFS, track *model.MediaFile) {
 		}
 	}
 
-	// Load the main sidecar (.lrc) if we don't have embedded lyrics.
+	// Load the main sidecar (.lrc) if we don't have real embedded lyrics.
 	if !hasMain {
 		if body, ok := readSidecarFS(fsys, baseRel+".lrc"); ok {
 			if parsed, err := model.ParseLyrics(".lrc", "xxx", []byte(body)); err == nil {
