@@ -3,11 +3,14 @@ package scanner
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"path"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -282,6 +285,11 @@ func (p *phaseFolders) loadTagsFromFiles(entry *folderEntry, toImport map[string
 		for filePath, info := range allInfo {
 			md := metadata.New(filePath, info)
 			track := md.ToMediaFile(entry.job.lib.ID, entry.id)
+			// After reading embedded tags, check for .lrc and .ru.lrc sidecar
+			// files. If the track has no embedded lyrics, or if a RU translation
+			// sidecar exists that isn't in the embedded data, load it so the web
+			// player shows lyrics without needing a separate DB sync step.
+			loadSidecarLyrics(entry.job.fs, &track)
 			tracks = append(tracks, track)
 			for _, t := range track.Tags.FlattenAll() {
 				uniqueTags[t.ID] = t
@@ -303,6 +311,93 @@ func (p *phaseFolders) loadTagsFromFiles(entry *folderEntry, toImport map[string
 	entry.tracks = tracks
 	entry.tags = slices.Collect(maps.Values(uniqueTags))
 	return nil
+}
+
+// sidecarLanguages lists language suffixes to look for as translation sidecars
+// (e.g. "Track.ru.lrc" for a Russian translation alongside "Track.lrc").
+var sidecarLanguages = []string{"ru", "en", "de", "fr", "es", "it", "pt", "ja", "zh", "ko"}
+
+// loadSidecarLyrics reads .lrc and .<lang>.lrc sidecar files next to the track
+// and merges them into track.Lyrics (the JSON LyricList the web player reads).
+// If the track already has embedded lyrics AND a translation, it does nothing.
+// Uses the scanner's storage.FS (library-relative paths), not raw OS calls.
+func loadSidecarLyrics(fsys storage.MusicFS, track *model.MediaFile) {
+	// Build the sidecar base path (relative to library root): strip extension.
+	ext := path.Ext(track.Path)
+	baseRel := track.Path[:len(track.Path)-len(ext)]
+
+	// Parse existing embedded lyrics (if any).
+	var list model.LyricList
+	if track.Lyrics != "" {
+		if existing, err := model.ParseLyrics(".lrc", "xxx", []byte(track.Lyrics)); err == nil {
+			list = existing
+		}
+	}
+
+	// Track which lang/kind we already have from embedded lyrics.
+	hasMain := len(list) > 0
+	existingLangs := make(map[string]bool)
+	for _, l := range list {
+		if l.Lang != "" && l.Lang != "xxx" {
+			existingLangs[l.Lang] = true
+		}
+	}
+
+	// Load the main sidecar (.lrc) if we don't have embedded lyrics.
+	if !hasMain {
+		if body, ok := readSidecarFS(fsys, baseRel+".lrc"); ok {
+			if parsed, err := model.ParseLyrics(".lrc", "xxx", []byte(body)); err == nil {
+				for i := range parsed {
+					parsed[i].Kind = model.LyricKindMain
+				}
+				list = append(list, parsed...)
+				hasMain = true
+			}
+		}
+	}
+
+	// Load translation sidecars (.<lang>.lrc) for languages we don't already have.
+	for _, lang := range sidecarLanguages {
+		if existingLangs[lang] {
+			continue
+		}
+		suf := "." + lang + ".lrc"
+		if body, ok := readSidecarFS(fsys, baseRel+suf); ok {
+			if parsed, err := model.ParseLyrics(suf, lang, []byte(body)); err == nil {
+				for i := range parsed {
+					parsed[i].Kind = model.LyricKindTranslation
+					parsed[i].Lang = lang
+				}
+				list = append(list, parsed...)
+			}
+		}
+	}
+
+	if len(list) == 0 {
+		return
+	}
+
+	// Marshal the merged LyricList back to the JSON string the DB expects.
+	data, err := json.Marshal(list)
+	if err != nil {
+		log.Warn(nil, "Scanner: failed to marshal sidecar lyrics", "track", track.Title, err)
+		return
+	}
+	track.Lyrics = string(data)
+}
+
+// readSidecarFS reads a sidecar file from the scanner's storage.FS (relative path).
+func readSidecarFS(fsys storage.MusicFS, relPath string) (string, bool) {
+	f, err := fsys.Open(relPath)
+	if err != nil {
+		return "", false
+	}
+	defer f.Close()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(string(data)), true
 }
 
 // createAlbumsFromMediaFiles groups the entry's tracks by album ID and creates albums
