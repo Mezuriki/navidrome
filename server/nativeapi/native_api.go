@@ -63,6 +63,15 @@ func (api *Router) routes() http.Handler {
 	// Public
 	api.RX(r, "/translation", newTranslationRepository, false)
 
+	// Public enrich proxy (no auth — proxies to Mixarr's public endpoints).
+	// These let the navidrome Activity panel show/cancel Mixarr tasks.
+	r.Get("/ai/enrich/status", func(w http.ResponseWriter, r *http.Request) {
+		api.aiHandler.EnrichStatus(w, r)
+	})
+	r.Post("/ai/enrich/cancel", func(w http.ResponseWriter, r *http.Request) {
+		api.aiHandler.EnrichCancel(w, r)
+	})
+
 	// Protected
 	r.Group(func(r chi.Router) {
 		r.Use(server.Authenticator(api.ds))
@@ -315,12 +324,6 @@ func (api *Router) addAIRoute(r chi.Router) {
 			})
 			r.Post("/decode/batch", func(w http.ResponseWriter, r *http.Request) {
 				api.aiHandler.DecodeBatch(w, r)
-			})
-			r.Get("/enrich/status", func(w http.ResponseWriter, r *http.Request) {
-				api.aiHandler.EnrichStatus(w, r)
-			})
-			r.Post("/enrich/cancel", func(w http.ResponseWriter, r *http.Request) {
-				api.aiHandler.EnrichCancel(w, r)
 			})
 		})
 }
