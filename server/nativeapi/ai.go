@@ -1,6 +1,7 @@
 package nativeapi
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -382,7 +383,12 @@ func (h *AIHandler) DecodeBatch(w http.ResponseWriter, r *http.Request) {
 // ── Mixarr enrichment proxy endpoints ────────────────────────────────────────
 // These let the navidrome Activity panel show/cancel a running Mixarr task.
 
-var mixarrHTTPClient = &http.Client{Timeout: 15 * time.Second}
+var mixarrHTTPClient = &http.Client{
+	Timeout: 15 * time.Second,
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // Mixarr uses self-signed certs
+	},
+}
 
 // EnrichStatus proxies a GET to Mixarr's enrich/status endpoint.
 func (h *AIHandler) EnrichStatus(w http.ResponseWriter, r *http.Request) {
