@@ -329,8 +329,12 @@ const ActivityPanel = () => {
               </IconButton>
             </Tooltip>
           </CardActions>
+          <MixarrEnrichCard status={enrichStatus} onUpdated={refreshEnrich} />
         </Card>
       </Popover>
+      {enrichActive && (
+        <CircularProgress size={20} className={classes.progress} />
+      )}
     </div>
   )
 }
