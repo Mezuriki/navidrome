@@ -123,7 +123,7 @@ const CustomUserMenu = ({ onClick, ...rest }) => {
       {config.devActivityPanel &&
         permissions === 'admin' &&
         config.enableNowPlaying && <NowPlayingPanel />}
-      {config.devActivityPanel && permissions === 'admin' && <ActivityPanel />}
+      <ActivityPanel />
       <UserMenu {...rest}>
         <PersonalMenu sidebarIsOpen={true} onClick={onClick} />
         <Divider />

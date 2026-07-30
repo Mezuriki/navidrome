@@ -2,8 +2,10 @@ package nativeapi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/navidrome/navidrome/core/ai"
 	"github.com/navidrome/navidrome/log"
@@ -376,6 +378,46 @@ func (h *AIHandler) DecodeBatch(w http.ResponseWriter, r *http.Request) {
 	}
 	encodeJSON(w, map[string]interface{}{"results": results})
 }
+
+// ── Mixarr enrichment proxy endpoints ────────────────────────────────────────
+// These let the navidrome Activity panel show/cancel a running Mixarr task.
+
+var mixarrHTTPClient = &http.Client{Timeout: 15 * time.Second}
+
+// EnrichStatus proxies a GET to Mixarr's enrich/status endpoint.
+func (h *AIHandler) EnrichStatus(w http.ResponseWriter, r *http.Request) {
+	mixarrURL := mixarrBaseURL(r)
+	resp, err := mixarrHTTPClient.Get(mixarrURL + "/api/navidrome/enrich/status")
+	if err != nil {
+		encodeJSON(w, map[string]interface{}{"status": "idle"})
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", "application/json")
+	io.Copy(w, resp.Body)
+}
+
+// EnrichCancel proxies a POST to Mixarr's enrich/cancel endpoint.
+func (h *AIHandler) EnrichCancel(w http.ResponseWriter, r *http.Request) {
+	mixarrURL := mixarrBaseURL(r)
+	resp, err := mixarrHTTPClient.Post(mixarrURL+"/api/navidrome/enrich/cancel", "application/json", nil)
+	if err != nil {
+		http.Error(w, "Failed to reach Mixarr", http.StatusServiceUnavailable)
+		return
+	}
+	defer resp.Body.Close()
+	w.Header().Set("Content-Type", "application/json")
+	io.Copy(w, resp.Body)
+}
+
+func mixarrBaseURL(r *http.Request) string {
+	if q := r.URL.Query().Get("mixarrUrl"); q != "" {
+		return strings.TrimRight(q, "/")
+	}
+	return "https://192.168.1.95:3443"
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 
 // Test verifies the AI provider configuration by sending a minimal probe
 // request. It accepts an optional JSON body {provider, apiKey, apiEndpoint,
