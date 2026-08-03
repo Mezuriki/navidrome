@@ -325,18 +325,29 @@ func alignToOriginalTiming(originalLRC, translation string) string {
 	}
 
 	var b strings.Builder
-	for i, line := range transLines {
-		prefix := ""
-		if i < len(ts) {
-			prefix = ts[i]
+	// Find the first non-empty timestamp from the original (skip header tags).
+	firstTs := "[00:00.00]"
+	for _, t := range ts {
+		if t != "" {
+			firstTs = t
+			break
 		}
+	}
+	for i, line := range transLines {
 		text := strings.TrimSpace(stripLeadingTags(line))
 		if text == "" {
 			continue
 		}
-		if prefix != "" {
-			b.WriteString(prefix + " ")
+		prefix := ""
+		if i < len(ts) && ts[i] != "" {
+			prefix = ts[i]
+		} else if i == 0 {
+			// First translated line but original has no timestamp at index 0
+			// (e.g. header tag). Use the first real timestamp so the line is
+			// never untimed.
+			prefix = firstTs
 		}
+		b.WriteString(prefix + " ")
 		b.WriteString(text)
 		b.WriteByte('\n')
 	}
