@@ -5,7 +5,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { Paper, Box, Tabs, Tab, Typography, IconButton, Chip, Button, CircularProgress } from '@material-ui/core'
 import { MdClose as CloseIcon, MdHelpOutline as MeaningIcon, MdLyrics, MdAutorenew } from 'react-icons/md'
 import { Rnd } from 'react-rnd'
-import { makeStyles } from '@material-ui/core/styles'
+import { makeStyles, useTheme } from '@material-ui/core/styles'
 import { useTranslate, useNotify, useGetOne } from 'react-admin'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
@@ -302,6 +302,7 @@ const hasTranslation = (list, lang) =>
 // ---- Lyrics tab ----
 const LyricsTab = ({ record }) => {
   const classes = useStyles()
+  const theme = useTheme()
   const translate = useTranslate()
   const dispatch = useDispatch()
   const lyricLang = useSelector((state) => state.player?.lyricLang || 'original')
@@ -324,11 +325,16 @@ const LyricsTab = ({ record }) => {
     }
   }, [lyricsSource])
 
-  const track = useMemo(() => pickLyricTrack(structured, lyricLang), [structured, lyricLang])
+  const track = useMemo(() => pickLyricTrack(structured, lyricLang === 'both' ? 'original' : lyricLang), [structured, lyricLang])
+  const ruTrack = useMemo(() => pickLyricTrack(structured, 'ru'), [structured])
   const lines = useMemo(() => {
     if (!track || !Array.isArray(track.line)) return []
     return track.line.filter((l) => l && l.value != null && l.value !== '')
   }, [track])
+  const ruLines = useMemo(() => {
+    if (!ruTrack || !Array.isArray(ruTrack.line)) return []
+    return ruTrack.line.filter((l) => l && l.value != null && l.value !== '')
+  }, [ruTrack])
   const ruAvailable = useMemo(() => hasTranslation(structured, 'ru'), [structured])
 
   // Per-track lyric timing offset in ms, persisted in localStorage so the user's
@@ -457,6 +463,16 @@ const LyricsTab = ({ record }) => {
           </button>
           <button
             type="button"
+            title="Оригинал + перевод"
+            className={`${classes.langBtn} ${lyricLang === 'both' ? classes.langBtnActive : ''}`}
+            style={{ background: lyricLang === 'both' ? theme.palette.primary.main : theme.palette.action.hover, color: lyricLang === 'both' ? theme.palette.primary.contrastText : theme.palette.text.secondary, fontSize: '0.55rem', border: `1px solid ${theme.palette.divider}` }}
+            onClick={() => dispatch(setLyricLang('both'))}
+            disabled={!ruAvailable}
+          >
+            ⊞
+          </button>
+          <button
+            type="button"
             title={translate('ai.window.original')}
             className={`${classes.langBtn} ${classes.langBtnOrig} ${lyricLang === 'original' ? classes.langBtnActive : ''}`}
             onClick={() => dispatch(setLyricLang('original'))}
@@ -471,15 +487,41 @@ const LyricsTab = ({ record }) => {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
       <div className={classes.panelScroll} ref={scrollContainerRef}>
-        {lines.map((l, i) => (
-          <div
-            key={i}
-            ref={i === activeIndex ? activeLineRef : null}
-            className={`${classes.lyricLine} ${i === activeIndex ? classes.lyricLineActive : ''}`}
-          >
-            {l.value}
+        {lyricLang === 'both' && ruAvailable ? (
+          <div style={{ display: 'flex', gap: theme.spacing(1) }}>
+            <div style={{ flex: 1 }}>
+              {lines.map((l, i) => (
+                <div
+                  key={i}
+                  ref={i === activeIndex ? activeLineRef : null}
+                  className={`${classes.lyricLine} ${i === activeIndex ? classes.lyricLineActive : ''}`}
+                >
+                  {l.value}
+                </div>
+              ))}
+            </div>
+            <div style={{ flex: 1 }}>
+              {ruLines.map((l, i) => (
+                <div
+                  key={i}
+                  className={`${classes.lyricLine} ${i === activeIndex ? classes.lyricLineActive : ''}`}
+                >
+                  {l.value}
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
+        ) : (
+          lines.map((l, i) => (
+            <div
+              key={i}
+              ref={i === activeIndex ? activeLineRef : null}
+              className={`${classes.lyricLine} ${i === activeIndex ? classes.lyricLineActive : ''}`}
+            >
+              {l.value}
+            </div>
+          ))
+        )}
         {lyricLang === 'ru' && !ruAvailable && (
           <Typography variant="body2" className={classes.lyricEmpty}>
             {translate('ai.window.noRu')}
@@ -493,6 +535,16 @@ const LyricsTab = ({ record }) => {
             onClick={() => dispatch(setLyricLang('ru'))}
           >
             RU
+          </button>
+          <button
+            type="button"
+            title="Оригинал + перевод"
+            className={`${classes.langBtn} ${lyricLang === 'both' ? classes.langBtnActive : ''}`}
+            style={{ background: lyricLang === 'both' ? theme.palette.primary.main : theme.palette.action.hover, color: lyricLang === 'both' ? theme.palette.primary.contrastText : theme.palette.text.secondary, fontSize: '0.55rem', border: `1px solid ${theme.palette.divider}` }}
+            onClick={() => dispatch(setLyricLang('both'))}
+            disabled={!ruAvailable}
+          >
+            ⊞
           </button>
           <button
             type="button"
@@ -678,6 +730,23 @@ const AIWindow = ({ open, onClose, record }) => {
   useEffect(() => {
     if (open) setTab(0)
   }, [open, record?.id])
+
+  // Auto-widen when lyricLang === 'both' (two columns need more width).
+  // Restore previous width when switching back to single-column.
+  const lyricLang = useSelector((state) => state.player?.lyricLang || 'original')
+  const prevWidthRef = useRef(0)
+  useEffect(() => {
+    if (!open) return
+    const vw = window.innerWidth
+    if (lyricLang === 'both') {
+      prevWidthRef.current = size.width
+      const wide = Math.min(720, vw - 32)
+      if (size.width < wide) setSize((s) => ({ ...s, width: wide }))
+    } else if (prevWidthRef.current > 0) {
+      setSize((s) => ({ ...s, width: Math.min(prevWidthRef.current, vw - 32) }))
+      prevWidthRef.current = 0
+    }
+  }, [lyricLang, open])
 
   // Keep the window fully inside the viewport whenever the browser window is
   // resized or zoomed, so it never ends up off-screen (the user reported the

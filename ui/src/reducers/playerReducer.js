@@ -260,6 +260,8 @@ export const playerReducer = (previousState = initialState, payload) => {
       return reduceMode(previousState, payload)
     case PLAYER_SET_LYRIC_LANG: {
       const lang = payload.lang || 'original'
+      // 'both' is an AI-window-only mode; the external player shows original.
+      const lrcLang = lang === 'both' ? 'original' : lang
       // Rebuild the lyric text of every queued track for the new language
       // WITHOUT setting `clear` — the external player reloads the current
       // item's lyric from the updated audioLists without restarting playback.
@@ -269,7 +271,7 @@ export const playerReducer = (previousState = initialState, payload) => {
         queue: previousState.queue.map((item) =>
           item.isRadio
             ? item
-            : { ...item, lyric: lyricsToLrc(item.song?.lyrics, lang) },
+            : { ...item, lyric: lyricsToLrc(item.song?.lyrics, lrcLang) },
         ),
       }
     }
